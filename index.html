@@ -167,7 +167,7 @@ const MON=['Январь','Февраль','Март','Апрель','Май','�
 let REF=null;   // [{desc,ntd,iso,cat,sub,risk,psz,wdir,n,y,k}]
 let DEPS=null;  // [{dep,obj,owner,wdir,n}]
 let TPL=null;   // ArrayBuffer бланка
-let PROF={pos:'',fio:'',days:14,loc:'',cdir:'ПК по ОТ, ПБ и ООС',suf:'ОТ',org:'',upd:'',mailUrl:'',mailToken:'',mailTo:'',mailCc:'',mailAuto:false};
+let PROF={pos:'',fio:'',days:14,loc:'',cdir:'ПК по ОТ, ПБ и ООС',suf:'ОТ',org:'',upd:'',mailUrl:'',mailToken:'',mailTo:'',mailCc:'',mailAuto:false,mailAfter:false};
 let ACTS=[];    // предписания (без фото)
 let CUR=null, CURI=-1;
 
@@ -383,7 +383,9 @@ function bindViaClaude(a){ const t=$('#toClaude'); if(!t) return;
       it.desc=String(r.desc).trim(); it.ntd=String(r.ntd||'').trim(); it.ntdWarn=/знани/i.test(r.ntd_from||'')||!it.ntd; it.iso=String(r.iso||it.iso);
       if(CATS.includes(r.cat)) it.cat=r.cat; if(SUBS.includes(r.sub)) it.sub=r.sub; const rk=String(r.risk||'').toUpperCase(); if(RISKS.includes(rk)) it.risk=rk; it.psz=PSZ.includes(r.psz)?r.psz:'';
       if(+r.due_days) it.due=plusDays(Math.min(365,+r.due_days),a.date||today()); it.why='Сформулировано Claude'; it.src='claude'; }
-    saveActs(); renderAct(); toast(n?`Обновлено пунктов: ${n}`:'Номера пунктов не совпали — проверьте ответ.'); }; }
+    saveActs(); renderAct();
+    if(n&&PROF.mailAfter&&MAIL_OK()&&a.items.every(i=>i.desc)){ toast(`Обновлено пунктов: ${n} — отправляю на почту`); sendMail(a); return; }
+    toast(n?`Обновлено пунктов: ${n}`:'Номера пунктов не совпали — проверьте ответ.'); }; }
 
 
 /* ===================== встроенные базы (зашифрованный пакет data.enc) ===================== */
@@ -526,7 +528,8 @@ function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textC
   bindViaClaude(a);
   $('#delAct').onclick=()=>{ $('#delBox').innerHTML=`<div class="conf"><span class="grow small">Удалить ${esc(actNo(a))} с этого устройства?</span><button class="btn dang" id="delYes">Удалить</button><button class="btn" id="delNo">Отмена</button></div>`;
     $('#delNo').onclick=()=>renderAct(); $('#delYes').onclick=async()=>{ for(const it of a.items) for(const p of it.photos) kvDel('ph:'+p); ACTS=ACTS.filter(x=>x.id!==a.id); CUR=null; await kvSet('acts',ACTS); go('home'); }; };
-  bar(`<button class="btn pri" id="addIt">+ Пункт</button>`);
+  bar(`<button class="btn${MAIL_OK()&&a.items.length?'':' pri'}" id="addIt">+ Пункт</button>${MAIL_OK()&&a.items.length?`<button class="btn pri" id="barMail">📧 На почту</button>`:''}`);
+  const bm=$('#barMail'); if(bm) bm.onclick=async()=>{ bm.disabled=true; try{ await sendMail(a); }finally{ bm.disabled=false; } };
   $('#addIt').onclick=()=>{ a.items.push(blankItem()); CURI=a.items.length-1; saveSoon(); go('item'); };
 }
 
@@ -600,6 +603,7 @@ function renderSettings(){ $('#ttl').textContent='Настройки'; const R=r
       <label class="field"><span>Ссылка сервиса отправки</span><input id="p_mailUrl" inputmode="url" value="${esc(PROF.mailUrl)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
       <label class="field"><span>Код доступа (тот же, что в скрипте)</span><input id="p_mailToken" value="${esc(PROF.mailToken)}"></label>
       <label class="row small"><input type="checkbox" id="p_mailAuto" ${PROF.mailAuto?'checked':''}> Отправлять автоматически при нажатии «Предписание .xlsx»</label>
+      <label class="row small"><input type="checkbox" id="p_mailAfter" ${PROF.mailAfter?'checked':''}> Отправлять сразу после «Применить к пунктам», если все пункты сформулированы</label>
       <div class="row"><button class="btn grow" id="mailTest">Отправить тестовое письмо</button></div><div class="small" id="mailTestSt"></div></section>`:''}
     <section class="card sheet"><div class="lbl">По умолчанию</div>
       <div class="grid2 st"><label class="field"><span>Моя должность</span><input id="p_pos" value="${esc(PROF.pos)}"></label><label class="field"><span>Фамилия И.О.</span><input id="p_fio" value="${esc(PROF.fio)}"></label></div>
@@ -609,7 +613,7 @@ function renderSettings(){ $('#ttl').textContent='Настройки'; const R=r
     <section class="card sheet"><div class="lbl">Резервная копия</div><div class="small muted">Предписания хранятся только в этом браузере. Сохраняйте копию перед очисткой телефона или чтобы перенести на компьютер (без фото).</div>
       <div class="row"><button class="btn grow" id="bkSave">Сохранить копию .json</button><label class="btn grow">Восстановить<input type="file" id="bkLoad" accept=".json,application/json" hidden></label></div></section>`;
   const upd=(id,k)=>$('#'+id).addEventListener('input',e=>{ PROF[k]=e.target.value; kvSet('prof',PROF); }); upd('p_pos','pos'); upd('p_fio','fio'); upd('p_days','days'); upd('p_loc','loc'); upd('p_suf','suf'); upd('p_cdir','cdir'); upd('p_org','org'); upd('p_upd','upd');
-  if(IS_APP){ upd('p_mailTo','mailTo'); upd('p_mailCc','mailCc'); upd('p_mailUrl','mailUrl'); upd('p_mailToken','mailToken'); $('#p_mailAuto').onchange=e=>{ PROF.mailAuto=e.target.checked; kvSet('prof',PROF); };
+  if(IS_APP){ upd('p_mailTo','mailTo'); upd('p_mailCc','mailCc'); upd('p_mailUrl','mailUrl'); upd('p_mailToken','mailToken'); $('#p_mailAuto').onchange=e=>{ PROF.mailAuto=e.target.checked; kvSet('prof',PROF); }; $('#p_mailAfter').onchange=e=>{ PROF.mailAfter=e.target.checked; kvSet('prof',PROF); };
     $('#mailTest').onclick=async()=>{ const st=$('#mailTestSt'); if(!PROF.mailUrl||!PROF.mailTo){ st.textContent='Заполните «Кому» и ссылку сервиса.'; return; } st.textContent='Отправляю…';
       try{ await postMail({token:PROF.mailToken||'',to:PROF.mailTo,cc:'',subject:'Предписания СП — тест',body:'Тестовое письмо: отправка из приложения работает.',files:[]}); st.textContent='Отправлено — проверьте почту '+PROF.mailTo; st.style.color='var(--ok)'; }
       catch(e){ st.textContent='Не отправлено: '+(e.message||e); st.style.color='var(--crit)'; } }; }
