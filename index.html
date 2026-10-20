@@ -366,14 +366,25 @@ ${lines.join('\n')}
 \`\`\``;
   return {text,L}; }
 async function packFiles(L){ const out=[]; let k=0; for(const {it} of L) for(const id of it.photos.slice(0,3)){ const b=await kvGet('ph:'+id); k++; if(b) out.push(new File([b],`фото ${k}.jpg`,{type:'image/jpeg'})); } return out; }
+function showSteps(copied){ const sec=$('#viaClaude'); if(!sec) return; $('#shareSteps')?.remove(); const d=document.createElement('div'); d.id='shareSteps'; d.className='conf small';
+  d.innerHTML=copied?'<span class="grow"><b>Фото</b> — выберите Claude в меню «Поделиться». <b>Текст пакета уже скопирован</b>: в чате Claude нажмите и удерживайте поле ввода → «Вставить», затем отправьте.</span>'
+    :'<span class="grow">Фото — выберите Claude в меню «Поделиться». Затем вернитесь сюда, нажмите «или скопировать текст» и вставьте текст в тот же чат.</span>';
+  sec.insertBefore(d,sec.querySelector('label.field')); }
 function bindViaClaude(a){ const t=$('#toClaude'); if(!t) return;
   // фото готовим заранее: на iPhone «Поделиться» надо вызывать сразу по нажатию, без ожиданий
   let PACK=null; (async()=>{ const p=claudePack(a); PACK={text:p.text,files:await packFiles(p.L)}; })();
   const cp=$('#copyClaude'); if(cp) cp.onclick=async()=>{ const {text}=claudePack(a); try{ await withTO(navigator.clipboard.writeText(text),3000); toast('Текст скопирован. Вставьте его в чат Claude и приложите фото из галереи.'); }catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.style.whiteSpace='pre-wrap'; box.textContent=text; cp.closest('section').append(box); toast('Выделите текст и скопируйте вручную'); } };
   t.onclick=async()=>{ if(t.disabled) return; t.disabled=true; setTimeout(()=>{ t.disabled=false; },4000); const text=PACK?PACK.text:claudePack(a).text; const files=PACK?PACK.files:[];
     if(CAP){ try{ const uris=[]; for(let i=0;i<files.length;i++) uris.push(await capFile('foto_'+(i+1)+'.jpg',files[i])); await capShare({text,...(uris.length?{files:uris}:{}),dialogTitle:'Отправить в Claude'}); toast('Скопируйте ответ Claude целиком и вставьте в поле «2. Ответ Claude»'); }catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) toast('Не удалось открыть «Поделиться»: '+(e&&e.message||e)); } return; }
-    try{ if(navigator.share){ const data={text}; if(files.length&&navigator.canShare&&navigator.canShare({files})) data.files=files; navigator.share(data).catch(()=>{}); toast('Скопируйте ответ Claude целиком и вставьте в поле «2. Ответ Claude»');
-        if(files.length&&!data.files) toast('Фото не передались — приложите их в Claude вручную.'); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+    try{ if(navigator.share){
+        // iPhone при одновременной передаче текста и фото часто оставляет только текст.
+        // Поэтому: текст — в буфер обмена, а через «Поделиться» уходят только фото.
+        if(files.length&&navigator.canShare&&navigator.canShare({files})){
+          // оба вызова — сразу в момент нажатия, без ожидания (иначе iPhone может не открыть «Поделиться»)
+          let cp=null; try{ cp=navigator.clipboard.writeText(text); }catch(e){}
+          navigator.share({files}).catch(()=>{});
+          showSteps(!!cp); if(cp) cp.catch(()=>showSteps(false)); return; }
+        navigator.share({text}).catch(()=>{}); if(files.length) toast('Фото не передались — приложите их в Claude вручную.'); else toast('Скопируйте ответ Claude целиком и вставьте в поле «2. Ответ Claude»'); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
     try{ await navigator.clipboard.writeText(text); toast('Текст скопирован — вставьте его в чат Claude'+(files.length?' и приложите фото':'')); }
     catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.style.whiteSpace='pre-wrap'; box.textContent=text; t.closest('section').append(box); toast('Выделите текст и скопируйте вручную'); } };
   $('#pasteOk').onclick=()=>{ try{ applyPaste(); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
