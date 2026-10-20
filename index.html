@@ -124,6 +124,8 @@ details.hd[open]>summary .chev{transform:rotate(90deg)}
 .st-row.on .dot{background:var(--ok)}
 .st-row label.btn{min-height:36px;padding:4px 12px;font-size:13px}
 .st-row input[type=file]{display:none}
+.dlgw{position:fixed;inset:0;z-index:30;background:rgba(6,14,30,.45);display:grid;place-items:end center;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.dlg{width:100%;max-width:520px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:20;background:#0f1b2d;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .sheet{display:flex;flex-direction:column;gap:12px}
 .conf{background:var(--hl);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -178,14 +180,34 @@ function parseCSV(t){ if(t.charCodeAt(0)===0xFEFF) t=t.slice(1); const rows=[]; 
   if(f||row.length){ row.push(f); rows.push(row); } return rows; }
 const lc=s=>String(s||'').toLowerCase().replace(/ё/g,'е');
 function loadRef(text){ const r=parseCSV(text); if(!r.length||!/описание/i.test(r[0][0]||'')) throw new Error('Это не «Справочник нарушений»: в первой колонке должно быть «Описание нарушения».');
-  return r.slice(1).filter(x=>x[0]).map(x=>({desc:x[0],ntd:x[1]||'',iso:x[2]||'',cat:x[3]||'',sub:x[4]||'',risk:x[5]||'',psz:x[6]||'',wdir:x[7]||'',n:+x[8]||1,y:+x[9]||0,k:lc(x[0])})); }
+  return r.slice(1).filter(x=>x[0]).map(x=>({desc:x[0],ntd:x[1]||'',iso:x[2]||'',cat:x[3]||'',sub:x[4]||'',risk:x[5]||'',psz:x[6]||'',wdir:x[7]||'',n:+x[8]||1,y:+x[9]||0,k:' '+lc(x[0]).replace(/[^а-яa-z0-9]+/g,' ')})); }
 function loadDeps(text){ const r=parseCSV(text); if(!r.length||!/подразделение/i.test(r[0][0]||'')) throw new Error('Это не «Справочник подразделений».');
   return r.slice(1).filter(x=>x[0]).map(x=>({dep:x[0],obj:x[1]||'',owner:x[2]||'',wdir:x[3]||'',n:+x[4]||0})); }
 
 /* похожие формулировки из реестра */
-function stems(q){ return lc(q).split(/[^а-яa-z0-9]+/).filter(w=>w.length>2).map(w=>w.length>5?w.slice(0,Math.max(4,w.length-2)):w); }
-function similar(q,lim=8){ if(!REF||!q) return []; const ws=stems(q); if(!ws.length) return []; const need=ws.length===1?1:Math.min(2,ws.length); const res=[];
-  for(let i=0;i<REF.length;i++){ const t=REF[i].k; let s=0; for(const w of ws) if(t.includes(w)) s++; if(s>=need) res.push([s,i]); }
+const ABBR={'пш':'шланговый противогаз','пду':'портативное дыхательное устройство','тс':'транспортное средство','атс':'автотранспорт','сизод':'средств защиты органов дыхания','сиз':'средств индивидуальной защиты','огнет':'огнетушитель','гпм':'грузоподъемный механизм','сгзп':'съемные грузозахватные приспособления','кип':'контрольно измерительных','нд':'наряд-допуск','зп':'замкнутое пространство','пб':'пожарной безопасности','ппр':'противопожарного режима','нагреват*':'обогреватель тепловентилятор электроконвектор','обогреват*':'обогреватель тепловентилятор электроконвектор','электрочайн*':'электрочайник электронагревательн прибор','чайник*':'электрочайник электронагревательн прибор','проводк*':'электропроводк кабел изоляц','леса':'строительные леса','лесах':'строительные леса','осматр*':'осмотр','осмотр*':'осмотр','испыта*':'испытан','бирк*':'бирка','каре':'каре обвалован отбортовк','огнетушит*':'огнетушител'};
+const STOP=new Set(['отсут','отсутству','отсутств','наруш','нарушен','допуска','допуск','риск','риска','персон','персонал','работн','работник','работни','работ','рабоч','рабочего','участ','участк','помеще','помещени','объек','объект','прове','провер','проводи','провод','нет','без','для','при','над','под','или','что','это','так','также','имее','наличи','все','всех','сотру','сотрудн','обнару','обнаруж','выявл','выявле','место','мест','мес','сделан','необход','необходи','осуществл','должн','являе','являют','ходе','время','целях','целей','работы','работах','бирки','находи','находит','основан','основании','раз','дней','день','посторон','путях','путя','передвиж','пути','электро']);
+const stem1=w=>w.length>5?w.slice(0,Math.max(4,w.length-2)):w;
+/* группы: каждое слово заметки → набор основ (сокращения раскрываются в синонимы, совпадения внутри группы взаимозаменяемы) */
+function stemGroups(q){ const words=lc(q).split(/[^а-яa-z0-9]+/).filter(Boolean); const G=[]; const seen=new Set();
+  for(const w of words){ let exp=null; for(const [k0,v] of Object.entries(ABBR)){ const pre=k0.endsWith('*'), k=k0.replace('*',''); if(pre?w.startsWith(k):w===k){ exp=v; break; } }
+    const toks=(exp||w).split(/[^а-яa-z0-9]+/).filter(x=>x.length>2).map(stem1).filter(x=>!STOP.has(x));
+    if(!toks.length) continue; const key=toks.join('|'); if(seen.has(key)) continue; seen.add(key); G.push(toks); }
+  return G; }
+function stems(q){ return [...new Set(stemGroups(q).flat())]; }
+/* похожие из реестра: редкие слова весят больше; главное слово заметки обязано совпасть; без случайных совпадений */
+let DF={}, DFREF=null; function df(w){ if(DFREF!==REF){ DF={}; DFREF=REF; } if(DF[w]!=null) return DF[w]; const p=' '+w; let n=0; for(const r of REF) if(r.k.includes(p)) n++; return DF[w]=n; }
+function similar(q,lim=8){ if(!REF||!q) return []; const G=stemGroups(q); if(!G.length) return []; const N=REF.length;
+  const groups=G.map(g=>g.map(w=>({w,df:df(w),wt:Math.log(N/(df(w)+1))})).filter(x=>x.df>0)).map((m,i)=>({m,raw:G[i]}));
+  const known=groups.filter(g=>g.m.length); if(!known.length) return [];
+  const gw=g=>Math.max(...g.m.map(x=>x.wt));
+  const tot=groups.reduce((s,g)=>s+(g.m.length?gw(g):Math.log(N)*0.5),0);
+  // главное слово — самое специфичное (редкое) из встречающихся в реестре; оно обязано совпасть
+  // предмет нарушения обычно первым словом заметки («Леса…», «ПШ…», «Огнетушитель…») — он и ключевой
+  const key=known.find(g=>g.m.some(x=>x.df>=2))||known[0];
+  const res=[]; for(let i=0;i<N;i++){ const t=REF[i].k; if(!key.m.some(x=>t.includes(' '+x.w))) continue; let sc=0;
+    for(const g of known){ let best=0; for(const x of g.m) if(t.includes(' '+x.w)&&x.wt>best) best=x.wt; sc+=best*(g===key?1.5:1); }
+    if(groups.length>1&&sc<tot*0.3) continue; res.push([sc,i]); }
   res.sort((a,b)=>b[0]-a[0]||REF[b[1]].y-REF[a[1]].y||REF[b[1]].n-REF[a[1]].n); return res.slice(0,lim).map(([s,i])=>REF[i]); }
 
 /* ===================== утилиты ===================== */
@@ -197,14 +219,23 @@ const today=()=>iso(new Date());
 const plusDays=(n,from)=>{ const d=from?new Date(from+'T00:00'):new Date(); d.setDate(d.getDate()+n); return iso(d); };
 const dmy=s=>{ if(!s) return ''; const [y,m,d]=s.split('-'); return d+'.'+m+'.'+y; };
 const actNo=a=>`${a.type}-${a.nnn||'___'}-${a.yy}${a.suf?'-'+a.suf:''}`;
+const pad3=v=>{ const n=String(v||'').replace(/\D/g,''); return n?n.padStart(3,'0'):''; };
+const numKey=(t,yy,suf)=>`${t}|${yy}|${String(suf||'').toUpperCase()}`;
+function nextNum(t,yy,suf,skipId){ let mx=+((PROF.numMax||{})[numKey(t,yy,suf)]||0);
+  for(const a of (ACTS||[])) if(!a.example&&a.id!==skipId&&a.type===t&&a.yy===yy&&String(a.suf||'').toUpperCase()===String(suf||'').toUpperCase()) mx=Math.max(mx,+a.nnn||0);
+  return String(mx+1).padStart(3,'0'); }
+function noteNum(a){ const n=+a.nnn||0; if(!n) return; PROF.numMax=PROF.numMax||{}; const k=numKey(a.type,a.yy,a.suf); if(n>(+PROF.numMax[k]||0)){ PROF.numMax[k]=n; kvSet('prof',PROF); } }
 let tT=0; function toast(t){ const el=$('#toast'); el.textContent=t; el.hidden=false; clearTimeout(tT); tT=setTimeout(()=>el.hidden=true,4200); }
 function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 
-function blankAct(){ const d=new Date(); return {id:uid(),type:'К',nnn:'',yy:String(d.getFullYear()).slice(2),suf:PROF.suf||'ОТ',date:today(),loc:PROF.loc||'',cdir:PROF.cdir||'ПК по ОТ, ПБ и ООС',
+function blankAct(){ const d=new Date(); const yy=String(d.getFullYear()).slice(2); return {id:uid(),type:'К',nnn:nextNum('К',yy,PROF.suf||'ОТ'),yy:String(d.getFullYear()).slice(2),suf:PROF.suf||'ОТ',date:today(),loc:PROF.loc||'',cdir:PROF.cdir||'ПК по ОТ, ПБ и ООС',
   wdir:'',owner:'',dep:'',obj:'',subobj:'',insp:[{pos:PROF.pos||'',fio:PROF.fio||''}],att:{pos:'',fio:''},head:'',resp:'',items:[],upd:Date.now()}; }
 function blankItem(){ return {id:uid(),note:'',photos:[],desc:'',ntd:'',ntdWarn:false,iso:'',cat:'ОТ',sub:'Безопасная организация работ',risk:'1A',psz:'',due:plusDays(+PROF.days||14),by:'',why:'',src:''}; }
 
-async function saveActs(){ if(CUR){ CUR.upd=Date.now(); const i=ACTS.findIndex(a=>a.id===CUR.id); if(i>=0) ACTS[i]=CUR; else ACTS.unshift(CUR); } await kvSet('acts',ACTS); }
+function rememberDep(a){ if(!a||a.example||!a.dep) return; PROF.depMem=PROF.depMem||{}; const m=PROF.depMem[a.dep]||{};
+  for(const k of ['obj','owner','wdir','head','resp']) if(a[k]) m[k]=a[k]; if(a.att&&(a.att.pos||a.att.fio)) m.att={...a.att};
+  PROF.depMem[a.dep]=m; PROF.recent=[a.dep,...(PROF.recent||[]).filter(x=>x!==a.dep)].slice(0,5); noteNum(a); kvSet('prof',PROF); }
+async function saveActs(){ if(CUR){ rememberDep(CUR); CUR.upd=Date.now(); const i=ACTS.findIndex(a=>a.id===CUR.id); if(i>=0) ACTS[i]=CUR; else ACTS.unshift(CUR); } await kvSet('acts',ACTS); }
 let svT=0; function saveSoon(){ clearTimeout(svT); svT=setTimeout(saveActs,350); }
 
 /* фото: сжимаем до 1600 px и храним в устройстве */
@@ -374,33 +405,35 @@ function bindViaClaude(a){ const t=$('#toClaude'); if(!t) return;
   // фото готовим заранее: на iPhone «Поделиться» надо вызывать сразу по нажатию, без ожиданий
   let PACK=null; (async()=>{ const p=claudePack(a); PACK={text:p.text,files:await packFiles(p.L)}; })();
   const cp=$('#copyClaude'); if(cp) cp.onclick=async()=>{ const {text}=claudePack(a); try{ await withTO(navigator.clipboard.writeText(text),3000); toast('Текст скопирован. Вставьте его в чат Claude и приложите фото из галереи.'); }catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.style.whiteSpace='pre-wrap'; box.textContent=text; cp.closest('section').append(box); toast('Выделите текст и скопируйте вручную'); } };
-  t.onclick=async()=>{ if(t.disabled) return; t.disabled=true; setTimeout(()=>{ t.disabled=false; },4000); const text=PACK?PACK.text:claudePack(a).text; const files=PACK?PACK.files:[];
-    if(CAP){ try{ const uris=[]; for(let i=0;i<files.length;i++) uris.push(await capFile('foto_'+(i+1)+'.jpg',files[i])); await capShare({text,...(uris.length?{files:uris}:{}),dialogTitle:'Отправить в Claude'}); toast('Скопируйте ответ Claude целиком и вставьте в поле «2. Ответ Claude»'); }catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) toast('Не удалось открыть «Поделиться»: '+(e&&e.message||e)); } return; }
-    try{ if(navigator.share){
-        // iPhone при одновременной передаче текста и фото часто оставляет только текст.
-        // Поэтому: текст — в буфер обмена, а через «Поделиться» уходят только фото.
-        if(files.length&&navigator.canShare&&navigator.canShare({files})){
-          // оба вызова — сразу в момент нажатия, без ожидания (иначе iPhone может не открыть «Поделиться»)
-          let cp=null; try{ cp=navigator.clipboard.writeText(text); }catch(e){}
-          navigator.share({files}).catch(()=>{});
-          showSteps(!!cp); if(cp) cp.catch(()=>showSteps(false)); return; }
-        navigator.share({text}).catch(()=>{}); if(files.length) toast('Фото не передались — приложите их в Claude вручную.'); else toast('Скопируйте ответ Claude целиком и вставьте в поле «2. Ответ Claude»'); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
-    try{ await navigator.clipboard.writeText(text); toast('Текст скопирован — вставьте его в чат Claude'+(files.length?' и приложите фото':'')); }
-    catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.style.whiteSpace='pre-wrap'; box.textContent=text; t.closest('section').append(box); toast('Выделите текст и скопируйте вручную'); } };
-  $('#pasteOk').onclick=()=>{ try{ applyPaste(); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
-  const applyPaste=()=>{ const raw=$('#f_paste').value; if(!raw.trim()){ toast('Сначала вставьте ответ Claude в поле.'); return; } let arr=null; const m=/```(?:json)?\s*([\s\S]*?)```/.exec(raw); const body=m?m[1]:raw.slice(raw.indexOf('['),raw.lastIndexOf(']')+1);
+  t.onclick=async()=>{ if(t.disabled) return; t.disabled=true; setTimeout(()=>{ t.disabled=false; },4000);
+    const text=PACK?PACK.text:claudePack(a).text; const photos=PACK?PACK.files:[];
+    // задание — отдельным текстовым файлом: так iPhone передаёт его вместе с фото одним сообщением
+    const task=new File([text],`Задание ${safeName(actNo(a))}.txt`,{type:'text/plain'}); const files=[task,...photos];
+    if(CAP){ try{ const uris=[]; uris.push(await capFile('zadanie_'+safeName(actNo(a)).replace(/\s+/g,'_')+'.txt',task)); for(let i=0;i<photos.length;i++) uris.push(await capFile('foto_'+(i+1)+'.jpg',photos[i]));
+        await capShare({files:uris,dialogTitle:'Отправить в Claude'}); toast('Когда Claude ответит — «Копировать» под ответом и «2. Загрузить ответ»'); }
+      catch(e){ if(!/cancel/i.test(String(e&&e.message||e))) toast('Не удалось открыть «Поделиться»: '+(e&&e.message||e)); } return; }
+    try{ if(navigator.share&&navigator.canShare&&navigator.canShare({files})){ navigator.share({files}).catch(()=>{}); toast('Выберите Claude → «Отправить». Потом «Копировать» под ответом и «2. Загрузить ответ»'); return; }
+      if(navigator.share){ navigator.share({text}).catch(()=>{}); if(photos.length) toast('Фото не передались — приложите их в Claude вручную.'); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+    try{ await navigator.clipboard.writeText(text); toast('Текст скопирован — вставьте его в чат Claude'+(photos.length?' и приложите фото':'')); }
+    catch(e){ $('#manualBox').open=true; toast('Откройте «вручную» и скопируйте текст задания'); } };
+  $('#loadAns').onclick=async()=>{ let raw='';
+    try{ if(CAP&&capP('Clipboard')){ const r=await capP('Clipboard').read(); raw=r&&r.value||''; } else raw=await withTO(navigator.clipboard.readText(),20000); }catch(e){}
+    if(!raw||!/"desc"/.test(raw)){ $('#manualBox').open=true; const f=$('#f_paste'); if(raw) f.value=raw; toast(raw?'В буфере нет ответа Claude — скопируйте ответ целиком («Копировать» под сообщением).':'Не удалось прочитать буфер обмена — вставьте ответ в поле вручную.'); return; }
+    try{ applyPaste(raw); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
+  $('#pasteOk').onclick=()=>{ try{ applyPaste($('#f_paste').value); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
+  function applyPaste(raw){ if(!raw.trim()){ toast('Сначала вставьте ответ Claude в поле.'); return; } let arr=null; const m=/```(?:json)?\s*([\s\S]*?)```/.exec(raw); const body=m?m[1]:raw.slice(raw.indexOf('['),raw.lastIndexOf(']')+1);
     try{ arr=JSON.parse(body); }catch(e){} if(!Array.isArray(arr)){ toast('Не нашёл блок JSON в ответе — скопируйте ответ Claude целиком.'); return; }
     let n=0; for(const r of arr){ const it=a.items[(+r.n||0)-1]; if(!it||!r.desc) continue; n++;
       it.desc=String(r.desc).trim(); it.ntd=String(r.ntd||'').trim(); it.ntdWarn=/знани/i.test(r.ntd_from||'')||!it.ntd; it.iso=String(r.iso||it.iso);
       if(CATS.includes(r.cat)) it.cat=r.cat; if(SUBS.includes(r.sub)) it.sub=r.sub; const rk=String(r.risk||'').toUpperCase(); if(RISKS.includes(rk)) it.risk=rk; it.psz=PSZ.includes(r.psz)?r.psz:'';
       if(+r.due_days) it.due=plusDays(Math.min(365,+r.due_days),a.date||today()); it.why='Сформулировано Claude'; it.src='claude'; }
     saveActs(); renderAct();
-    if(n&&PROF.mailAfter&&MAIL_OK()&&a.items.every(i=>i.desc)){ toast(`Обновлено пунктов: ${n} — отправляю на почту`); sendMail(a); return; }
+    if(n&&PROF.mailAfter&&MAIL_OK()&&!actIssues(a).hard.length){ toast(`Обновлено пунктов: ${n} — отправляю на почту`); sendMail(a,true); return; }
     toast(n?`Обновлено пунктов: ${n}`:'Номера пунктов не совпали — проверьте ответ.'); }; }
 
 
 /* ===================== встроенные базы (зашифрованный пакет data.enc) ===================== */
-let DATA_V='', NEED_PASS=false, DATA_MSG='';
+let DATA_V='', NEED_PASS=false, DATA_MSG='', CFG={};
 const ub64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
 const updBase=()=>{ const u=(PROF.upd||'').trim(); return u?u.replace(/\/?$/,'/'):''; };
 async function fetchText(u){ const r=await withTO(fetch(u,{cache:'no-cache'}),15000); if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); }
@@ -409,12 +442,12 @@ async function packKey(pass,pk){ const km=await crypto.subtle.importKey('raw',ne
 async function openPack(pk,key){ const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:ub64(pk.iv)},key,ub64(pk.ct));
   const js=await new Response(new Blob([pt]).stream().pipeThrough(new DecompressionStream('gzip'))).text(); return JSON.parse(js); }
 async function applyPack(p){ REF=loadRef(p.ref); DEPS=loadDeps(p.deps); const t=ub64(p.tpl); TPL=t.buffer.slice(t.byteOffset,t.byteOffset+t.byteLength);
-  await kvSet('ref',p.ref); await kvSet('deps',p.deps); await kvSet('tpl',TPL); DATA_V=p.v; await kvSet('dataV',p.v); }
+  await kvSet('ref',p.ref); await kvSet('deps',p.deps); await kvSet('tpl',TPL); CFG=p.cfg||{}; await kvSet('cfg',CFG); DATA_V=p.v; await kvSet('dataV',p.v); }
 let PACK_RAW=null;
 async function syncData(manual){ DATA_MSG='';
   const bases=[...new Set([updBase(),''])];
   let pk=null;
-  for(const b of bases){ try{ const v=(await fetchText(b+'data-version.txt')).trim(); if(!v) continue; if(v===DATA_V&&!NEED_PASS&&REF&&TPL){ if(manual) DATA_MSG='Базы актуальны: версия '+v; return; }
+  for(const b of bases){ try{ const v=(await fetchText(b+'data-version.txt')).trim(); if(!v) continue; if(v===DATA_V&&!NEED_PASS&&REF&&TPL&&manual!=='force'){ if(manual) DATA_MSG='Базы актуальны: версия '+v; return; }
       pk=JSON.parse(await fetchText(b+'data.enc')); break; }catch(e){} }
   if(!pk){ if(manual) DATA_MSG=REF?'Нет связи с сервером обновлений — работают сохранённые базы'+(DATA_V?' (версия '+DATA_V+')':'')+'.':'Не удалось загрузить базы — проверьте интернет.'; return; }
   PACK_RAW=pk; const raw=await kvGet('dkey');
@@ -430,17 +463,20 @@ function bindPass(after){ const b=$('#passOk'); if(!b) return; b.onclick=async()
   try{ await unlockPack($('#f_pass').value.trim()); toast('Базы открыты: '+REF.length.toLocaleString('ru-RU')+' формулировок'); after(); }catch(e){ st.textContent=e.message; st.style.color='var(--crit)'; } finally{ b.disabled=false; } }; }
 
 /* ===================== отправка на почту (через свой Google Apps Script) ===================== */
-const MAIL_OK=()=>IS_APP&&PROF.mailUrl&&PROF.mailTo;
+const mailTo=()=>{ const u=String(PROF.mailUser||'').trim(); if(!u) return ''; return u.includes('@')?u:(CFG.mailDomain?u+'@'+CFG.mailDomain:''); };
+const mailCc=()=>{ const u=String(PROF.mailCcUser||'').trim(); if(!u) return ''; return u.includes('@')?u:(CFG.mailDomain?u+'@'+CFG.mailDomain:''); };
+const MAIL_OK=()=>IS_APP&&!!CFG.mailUrl&&!!mailTo();
 async function blobB64(b){ return await new Promise((ok,no)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(',')[1]); r.onerror=()=>no(r.error); r.readAsDataURL(b); }); }
 async function buildMail(a){ const no=actNo(a); const X='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const f1=await actXlsx(a), f2=regXlsx(a);
   const body=`Предписание № ${no} от ${dmy(a.date)}\n${a.dep||''}${a.obj&&a.obj!==a.dep?' · '+a.obj:''}${a.subobj?' · '+a.subobj:''}\nПроверку провели: ${a.insp.map(p=>[p.pos,p.fio].filter(Boolean).join(' ')).filter(Boolean).join('; ')||'—'}\n\nПункты (${a.items.length}):\n`+
     a.items.map((it,i)=>`${i+1}. ${it.desc||it.note} — срок ${dmy(it.due)||'—'}${it.ntdWarn?' (НТД проверить)':''}`).join('\n')+`\n\nВложения: предписание по бланку и строки для реестра СП (колонки B–X).\nОтправлено из приложения «Предписания СП».`;
-  return {token:PROF.mailToken||'',to:PROF.mailTo,cc:PROF.mailCc||'',subject:`Предписание ${no} · ${a.dep||''} · ${dmy(a.date)}`,body,
+  return {token:CFG.mailToken||'',to:mailTo(),cc:mailCc(),subject:`Предписание ${no} · ${a.dep||''} · ${dmy(a.date)}`,body,
     files:[{name:`Предписание ${safeName(no)} ${dmy(a.date)}.xlsx`,type:X,data:await blobB64(f1)},{name:`Строки в реестр ${safeName(no)}.xlsx`,type:X,data:await blobB64(f2)}]}; }
-async function postMail(m){ const r=await withTO(fetch(PROF.mailUrl,{method:'POST',body:JSON.stringify(m)}),30000); const t=await r.text(); let j=null; try{ j=JSON.parse(t); }catch(e){}
+async function postMail(m){ const r=await withTO(fetch(CFG.mailUrl,{method:'POST',body:JSON.stringify(m)}),30000); const t=await r.text(); let j=null; try{ j=JSON.parse(t); }catch(e){}
   if(!j||!j.ok) throw new Error(j&&j.error?('сервис ответил: '+j.error):'неожиданный ответ сервиса'); }
-async function sendMail(a,silent){ if(!MAIL_OK()){ toast('Укажите адрес почты и ссылку сервиса отправки в настройках.'); return false; }
+async function sendMail(a,silent){ if(!MAIL_OK()){ toast(CFG.mailUrl?'Укажите свой адрес в ⚙ → «Почта».':'Почта не настроена: ⚙ → «Почта» → «Запросить настройку почты».'); return false; }
+  if(silent){ if(actIssues(a).hard.length){ toast('Автоотправка пропущена: предписание не заполнено'); return false; } } else if(!(await preCheck(a,'отправить на почту'))) return false;
   if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return false; }
   let m; try{ m=await buildMail(a); }catch(e){ toast(e.message||'Не удалось собрать файлы'); return false; }
   const st=$('#mailSt'); if(st) st.textContent='Отправляю…';
@@ -449,10 +485,26 @@ async function sendMail(a,silent){ if(!MAIL_OK()){ toast('Укажите адр�
     if(offline){ const q=(await kvGet('outbox'))||[]; q.push({id:a.id,m}); await kvSet('outbox',q); a.queued=Date.now(); await saveActs(); if(st) st.textContent='Нет связи — письмо в очереди, уйдёт само, когда появится интернет'; toast('Нет связи — отправлю, когда появится интернет'); }
     else { if(st) st.textContent='Не отправлено: '+(e.message||e); toast('Не отправлено: '+(e.message||e)); } return false; } }
 let OUTBUSY=false;
-async function flushOutbox(){ if(OUTBUSY||!IS_APP||!PROF.mailUrl) return; OUTBUSY=true; try{ let q=(await kvGet('outbox'))||[]; if(!q.length) return; const left=[];
+async function flushOutbox(){ if(OUTBUSY||!IS_APP||!CFG.mailUrl) return; OUTBUSY=true; try{ let q=(await kvGet('outbox'))||[]; if(!q.length) return; const left=[];
     for(const x of q){ try{ await postMail(x.m); const a=ACTS.find(z=>z.id===x.id); if(a){ a.sentAt=Date.now(); a.sentTo=x.m.to; delete a.queued; } toast('Отложенное письмо отправлено: '+x.m.subject); }catch(e){ left.push(x); } }
     await kvSet('outbox',left); await kvSet('acts',ACTS); if(VIEW==='act'||VIEW==='home') (VIEW==='act'?renderAct:renderHome)(); }finally{ OUTBUSY=false; } }
 addEventListener('online',flushOutbox); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) setTimeout(flushOutbox,1500); });
+
+
+/* ===================== проверка перед отправкой ===================== */
+function actIssues(a){ const hard=[], soft=[];
+  if(!a.nnn) hard.push('не указан номер предписания'); if(!a.items.length) hard.push('нет ни одного пункта');
+  const nod=a.items.map((it,i)=>!it.desc?i+1:0).filter(Boolean); if(nod.length) hard.push('пункты без формулировки: '+nod.join(', '));
+  if(!a.dep) soft.push('не указано подразделение'); if(!(a.insp[0]&&a.insp[0].fio)) soft.push('не указан проверяющий'); if(!a.head) soft.push('не указан «С предписанием ознакомлен»');
+  const nd=a.items.map((it,i)=>!it.due?i+1:0).filter(Boolean); if(nd.length) soft.push('пункты без срока: '+nd.join(', '));
+  const nw=a.items.map((it,i)=>it.ntdWarn&&it.desc?i+1:0).filter(Boolean); if(nw.length) soft.push('НТД не проверены (⚠): пункты '+nw.join(', '));
+  return {hard,soft}; }
+function dlg(html,btns){ return new Promise(ok=>{ const w=document.createElement('div'); w.className='dlgw'; w.innerHTML=`<div class="dlg card sheet">${html}<div class="row">${btns.map((b,i)=>`<button class="btn grow ${b.pri?'pri':''}" data-i="${i}">${esc(b.t)}</button>`).join('')}</div></div>`;
+  document.body.appendChild(w); w.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ w.remove(); ok(btns[+b.dataset.i].v); }); }); }
+async function preCheck(a,what){ const {hard,soft}=actIssues(a); if(!hard.length&&!soft.length) return true;
+  const list=x=>x.map(t=>`<li>${esc(t)}</li>`).join('');
+  if(hard.length){ await dlg(`<div class="lbl">Нельзя ${esc(what)}</div><ul class="small" style="margin:0;padding-left:18px;color:var(--crit)">${list(hard)}</ul>${soft.length?`<div class="small muted">Ещё стоит проверить:</div><ul class="small" style="margin:0;padding-left:18px">${list(soft)}</ul>`:''}`,[{t:'Исправить',v:false,pri:true}]); return false; }
+  return await dlg(`<div class="lbl">Перед тем как ${esc(what)}</div><ul class="small" style="margin:0;padding-left:18px">${list(soft)}</ul>`,[{t:'Исправить',v:false},{t:'Всё равно',v:true,pri:true}]); }
 
 /* ===================== экраны ===================== */
 let VIEW='home';
@@ -488,10 +540,11 @@ function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textC
       <div class="small muted" id="hdSum">${esc([a.dep,a.obj&&a.obj!==a.dep?a.obj:'',dmy(a.date)].filter(Boolean).join(' · '))||'Заполните шапку'}</div></div></summary>
       <div class="hdbody">
         <div class="grid3"><label class="field"><span>Вид</span><select id="f_type" data-k="type"><option value="К"${a.type==='К'?' selected':''}>К — комплексная</option><option value="Ц"${a.type==='Ц'?' selected':''}>Ц — целевая</option></select></label>
-          <label class="field"><span>Номер</span><input id="f_nnn" data-k="nnn" class="num" inputmode="numeric" maxlength="4" placeholder="054" value="${esc(a.nnn)}"></label>
+          <label class="field"><span>Номер <span class="muted">(след. ${nextNum(a.type,a.yy,a.suf,a.id)})</span></span><input id="f_nnn" data-k="nnn" class="num" inputmode="numeric" maxlength="4" placeholder="${nextNum(a.type,a.yy,a.suf,a.id)}" value="${esc(a.nnn)}"></label>
           <label class="field"><span>Направление</span><input id="f_suf" data-k="suf" value="${esc(a.suf)}" placeholder="ОТ"></label></div>
         <div class="grid2"><label class="field"><span>Дата проверки</span><input id="f_date" type="date" data-k="date" value="${a.date}"></label><label class="field"><span>Год в номере</span><input id="f_yy" data-k="yy" class="num" maxlength="2" value="${esc(a.yy)}"></label></div>
-        <label class="field"><span>Структурное подразделение</span><input id="f_dep" data-k="dep" list="dlDep" value="${esc(a.dep)}" placeholder="УКПГ-2, ЦВП № 1…"></label>${depList()}
+        <label class="field"><span>Структурное подразделение</span><input id="f_dep" data-k="dep" list="dlDep" value="${esc(a.dep)}" placeholder="УКПГ-2, ЦВП № 1…"></label>
+        ${(PROF.recent||[]).length?`<div class="row" style="gap:6px"><span class="small muted">Недавние:</span>${PROF.recent.map(d=>`<button class="pill" data-rdep="${esc(d)}" style="border:0;cursor:pointer;min-height:30px">${esc(d)}</button>`).join('')}</div>`:''}${depList()}
         <label class="field"><span>Объект</span><input id="f_obj" data-k="obj" value="${esc(a.obj)}"></label>
         <label class="field"><span>Подобъект</span><input id="f_subobj" data-k="subobj" value="${esc(a.subobj)}" placeholder="помещение, площадка, куст…"></label>
         <div class="grid2 st"><label class="field"><span>Принадлежность объекта</span><input id="f_owner" data-k="owner" value="${esc(a.owner)}"></label><label class="field"><span>Направление работ</span><input id="f_wdir" data-k="wdir" value="${esc(a.wdir)}"></label></div>
@@ -510,13 +563,15 @@ function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textC
         <div class="chips">${it.desc?`<span class="pill">${esc(it.cat)}</span><span class="pill num">${esc(it.risk)}</span>`:'<span class="pill warn">нужно сформулировать</span>'}${it.due?`<span class="pill num">до ${dmy(it.due)}</span>`:''}${it.ntdWarn&&it.desc?'<span class="pill warn">⚠ проверить НТД</span>':''}${it.photos.length?`<span class="pill">📷 ${it.photos.length}</span>`:''}</div></div></div></button>`).join('')
       :`<div class="empty">Добавьте первый пункт: сфотографируйте нарушение и напишите пару слов. Формулировку, НТД и категорию подберёт Claude или справочник.</div>`}</div>
     ${!(SAMPLE&&!SAMPLE_OFF)&&a.items.length?`<section class="card sheet" id="viaClaude"><div class="lbl">Формулировки через Claude</div>
-      <div class="small muted">Отправьте пункты в приложение Claude — он сформулирует их по навыку «Предписание СП». Затем скопируйте его ответ целиком и вставьте сюда.</div>
-      <div class="row"><button class="btn pri grow" id="toClaude">1. Отправить в Claude</button><button class="btn ghost grow" id="copyClaude">или скопировать текст</button></div>
-      <label class="field"><span>2. Ответ Claude — нажмите и удерживайте в поле → «Вставить»</span><textarea id="f_paste" rows="4" placeholder="Сюда вставляется ответ Claude целиком"></textarea></label>
-      <button class="btn pri" id="pasteOk">3. Применить к пунктам</button></div></section>`:''}
+      <div class="small muted"><b>1.</b> Отправьте пункты: фото и задание уйдут в Claude одним сообщением — выберите Claude и нажмите «Отправить». <b>2.</b> Под ответом Claude нажмите «Копировать», вернитесь сюда и нажмите «Загрузить ответ».</div>
+      <div class="row"><button class="btn pri grow" id="toClaude">1. Отправить в Claude</button><button class="btn pri grow" id="loadAns">2. Загрузить ответ</button></div>
+      <details id="manualBox"><summary class="small muted" style="cursor:pointer;padding:6px 0">Если не получается — вручную</summary><div class="sheet" style="margin-top:8px">
+        <button class="btn ghost" id="copyClaude">Скопировать текст задания</button>
+        <label class="field"><span>Ответ Claude — нажмите и удерживайте → «Вставить»</span><textarea id="f_paste" rows="4" placeholder="Сюда вставляется ответ Claude целиком"></textarea></label>
+        <button class="btn" id="pasteOk">Применить к пунктам</button></div></details></section>`:''}
     <section class="card sheet"><div class="lbl">Готово? Файлы</div>
       <div class="row"><button class="btn pri grow" id="xlAct">Предписание .xlsx</button><button class="btn grow" id="xlReg">Строки в реестр .xlsx</button></div>
-      ${IS_APP?`<button class="btn pri" id="mailAct">📧 Отправить на почту${PROF.mailTo?' — '+esc(PROF.mailTo):''}</button><div class="small muted" id="mailSt">${a.sentAt?`Отправлено на ${esc(a.sentTo||'')} · ${new Date(a.sentAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`:a.queued?'Письмо в очереди — уйдёт, когда появится интернет':(PROF.mailUrl?'':'Настройте отправку в ⚙ → «Почта»')}</div>`:''}
+      ${IS_APP?`<button class="btn pri" id="mailAct">📧 Отправить на почту${mailTo()?' — '+esc(mailTo()):''}</button><div class="small muted" id="mailSt">${a.sentAt?`Отправлено на ${esc(a.sentTo||'')} · ${new Date(a.sentAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`:a.queued?'Письмо в очереди — уйдёт, когда появится интернет':(MAIL_OK()?'':'Настройте отправку в ⚙ → «Почта»')}</div>`:''}
       <div class="row"><button class="btn ghost grow" id="cpReg">Копировать строки для реестра</button></div>
       <div class="small muted">Строки встают в реестр СП с колонки B (Локация) первой пустой строки. «Статус» и «Просрочен» посчитают формулы реестра.</div>
       <div id="delBox"><button class="btn ghost dang" id="delAct">Удалить предписание</button></div></section>`;
@@ -524,13 +579,19 @@ function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textC
   const hd=$('#view'); hd.querySelectorAll('[data-k]').forEach(el=>el.addEventListener('input',()=>{ const k=el.dataset.k.split('.'); let o=a; for(let i=0;i<k.length-1;i++) o=o[k[i]]; o[k.at(-1)]=el.value;
     if(el.dataset.k.startsWith('insp.0')){ PROF.pos=a.insp[0].pos; PROF.fio=a.insp[0].fio; kvSet('prof',PROF); }
     $('#noPrev').textContent=actNo(a); $('#ttl').textContent=actNo(a); saveSoon(); }));
-  $('#f_dep').addEventListener('change',()=>{ const d=DEPS&&DEPS.find(x=>x.dep===a.dep); if(d){ if(!a.obj){ a.obj=d.obj; $('#f_obj').value=d.obj; } a.owner=a.owner||d.owner; a.wdir=a.wdir||d.wdir; $('#f_owner').value=a.owner; $('#f_wdir').value=a.wdir; saveSoon(); } });
+  const fillDep=()=>{ const m=(PROF.depMem||{})[a.dep]; const d=DEPS&&DEPS.filter(x=>x.dep===a.dep).sort((p,q)=>(q.obj.length>p.obj.length)-(q.obj.length<p.obj.length))[0];
+    const src={...(d?{obj:d.obj,owner:d.owner,wdir:d.wdir}:{}),...(m||{})};
+    for(const k of ['obj','owner','wdir','head','resp']) if(!a[k]&&src[k]){ a[k]=src[k]; const f=$('#f_'+k); if(f) f.value=src[k]; }
+    if(src.att&&!a.att.pos&&!a.att.fio){ a.att={...src.att}; $('#f_ap').value=a.att.pos||''; $('#f_af').value=a.att.fio||''; } saveSoon(); };
+  $('#f_dep').addEventListener('change',fillDep);
+  hd.querySelectorAll('[data-rdep]').forEach(b=>b.onclick=e=>{ e.preventDefault(); a.dep=b.dataset.rdep; $('#f_dep').value=a.dep; fillDep(); $('#hdSum').textContent=a.dep; });
+  $('#f_nnn').addEventListener('blur',()=>{ const v=pad3(a.nnn); if(v!==a.nnn){ a.nnn=v; $('#f_nnn').value=v; $('#noPrev').textContent=actNo(a); $('#ttl').textContent=actNo(a); saveSoon(); } });
   hd.querySelectorAll('[data-rmi]').forEach(b=>b.onclick=()=>{ a.insp.splice(+b.dataset.rmi,1); saveSoon(); renderAct(); $('#hd').open=true; });
   const ai=$('#addInsp'); if(ai) ai.onclick=()=>{ a.insp.push({pos:'',fio:''}); saveSoon(); renderAct(); $('#hd').open=true; };
   hd.querySelectorAll('.it').forEach(b=>b.onclick=()=>{ CURI=+b.dataset.i; go('item'); });
   const ad=$('#allDue'); if(ad) ad.onclick=()=>{ $('#allDueBox').hidden=!$('#allDueBox').hidden; };
   $('#allDueOk').onclick=()=>{ const v=$('#f_alldue').value; if(!v) return; a.items.forEach(i=>i.due=v); saveSoon(); renderAct(); toast('Срок '+dmy(v)+' для всех пунктов'); };
-  $('#xlAct').onclick=async()=>{ if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return; } if(PROF.mailAuto&&MAIL_OK()) sendMail(a); try{ const b=await actXlsx(a); await saveFile(`Предписание ${safeName(actNo(a))} ${dmy(a.date)}.xlsx`,b); }catch(e){ toast(e.message||'Не удалось собрать файл'); } };
+  $('#xlAct').onclick=async()=>{ if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return; } if(!(await preCheck(a,'формировать предписание'))) return; if(PROF.mailAuto&&MAIL_OK()) sendMail(a,true); try{ const b=await actXlsx(a); await saveFile(`Предписание ${safeName(actNo(a))} ${dmy(a.date)}.xlsx`,b); }catch(e){ toast(e.message||'Не удалось собрать файл'); } };
   const ma=$('#mailAct'); if(ma) ma.onclick=async()=>{ ma.disabled=true; try{ await sendMail(a); }finally{ ma.disabled=false; } };
   $('#xlReg').onclick=async()=>{ if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return; } await saveFile(`Строки в реестр ${safeName(actNo(a))}.xlsx`,regXlsx(a)); };
   $('#cpReg').onclick=async()=>{ if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return; } const t=regTsv(a);
@@ -608,14 +669,13 @@ function renderSettings(){ $('#ttl').textContent='Настройки'; const R=r
       <div class="row"><button class="btn grow" id="syncNow">Проверить обновление баз</button></div><div class="small" id="syncSt">${esc(DATA_MSG)}</div></section>
     ${NEED_PASS?passBox():''}
     ${IS_APP?`<section class="card sheet"><div class="lbl">Почта</div>
-      <div class="small muted">Письмо с предписанием и строками для реестра уходит через ваш сервис отправки (Google Apps Script) — без открытия почты.</div>
-      <label class="field"><span>Кому</span><input id="p_mailTo" type="email" inputmode="email" value="${esc(PROF.mailTo)}" placeholder="имя@компания.ru"></label>
-      <label class="field"><span>Копия (необязательно)</span><input id="p_mailCc" type="email" inputmode="email" value="${esc(PROF.mailCc)}"></label>
-      <label class="field"><span>Ссылка сервиса отправки</span><input id="p_mailUrl" inputmode="url" value="${esc(PROF.mailUrl)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
-      <label class="field"><span>Код доступа (тот же, что в скрипте)</span><input id="p_mailToken" value="${esc(PROF.mailToken)}"></label>
+      ${CFG.mailUrl?`<div class="small muted">Предписание с двумя Excel-файлами уходит на рабочую почту одним нажатием.</div>
+      <label class="field"><span>Кому</span><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="p_mailUser" class="grow" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(PROF.mailUser||'')}" placeholder="имя.фамилия" style="font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:10px 11px;min-height:44px;min-width:0"><span class="num small">@${esc(CFG.mailDomain||'')}</span></div></label>
+      <label class="field"><span>Копия (необязательно)</span><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="p_mailCcUser" class="grow" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(PROF.mailCcUser||'')}" placeholder="имя.фамилия" style="font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:10px 11px;min-height:44px;min-width:0"><span class="num small">@${esc(CFG.mailDomain||'')}</span></div></label>
       <label class="row small"><input type="checkbox" id="p_mailAuto" ${PROF.mailAuto?'checked':''}> Отправлять автоматически при нажатии «Предписание .xlsx»</label>
-      <label class="row small"><input type="checkbox" id="p_mailAfter" ${PROF.mailAfter?'checked':''}> Отправлять сразу после «Применить к пунктам», если все пункты сформулированы</label>
-      <div class="row"><button class="btn grow" id="mailTest">Отправить тестовое письмо</button></div><div class="small" id="mailTestSt"></div></section>`:''}
+      <label class="row small"><input type="checkbox" id="p_mailAfter" ${PROF.mailAfter?'checked':''}> Отправлять сразу после загрузки ответа Claude, если всё заполнено</label>
+      `:`<div class="small muted">Отправка на почту ещё не подключена на этом устройстве.</div><button class="btn pri" id="mailReq">Запросить настройку почты</button><div class="small" id="mailReqSt"></div>`}
+      ${CFG.mailUrl?`<div class="row"><button class="btn grow" id="mailTest">Отправить тестовое письмо</button></div><div class="small" id="mailTestSt"></div>`:''}</section>`:''}
     <section class="card sheet"><div class="lbl">По умолчанию</div>
       <div class="grid2 st"><label class="field"><span>Моя должность</span><input id="p_pos" value="${esc(PROF.pos)}"></label><label class="field"><span>Фамилия И.О.</span><input id="p_fio" value="${esc(PROF.fio)}"></label></div>
       <div class="grid3"><label class="field"><span>Срок, дней</span><input id="p_days" class="num" inputmode="numeric" value="${esc(PROF.days)}"></label><label class="field"><span>Локация</span><input id="p_loc" value="${esc(PROF.loc)}"></label><label class="field"><span>Направление</span><input id="p_suf" value="${esc(PROF.suf)}"></label></div>
@@ -624,10 +684,14 @@ function renderSettings(){ $('#ttl').textContent='Настройки'; const R=r
     <section class="card sheet"><div class="lbl">Резервная копия</div><div class="small muted">Предписания хранятся только в этом браузере. Сохраняйте копию перед очисткой телефона или чтобы перенести на компьютер (без фото).</div>
       <div class="row"><button class="btn grow" id="bkSave">Сохранить копию .json</button><label class="btn grow">Восстановить<input type="file" id="bkLoad" accept=".json,application/json" hidden></label></div></section>`;
   const upd=(id,k)=>$('#'+id).addEventListener('input',e=>{ PROF[k]=e.target.value; kvSet('prof',PROF); }); upd('p_pos','pos'); upd('p_fio','fio'); upd('p_days','days'); upd('p_loc','loc'); upd('p_suf','suf'); upd('p_cdir','cdir'); upd('p_org','org'); upd('p_upd','upd');
-  if(IS_APP){ upd('p_mailTo','mailTo'); upd('p_mailCc','mailCc'); upd('p_mailUrl','mailUrl'); upd('p_mailToken','mailToken'); $('#p_mailAuto').onchange=e=>{ PROF.mailAuto=e.target.checked; kvSet('prof',PROF); }; $('#p_mailAfter').onchange=e=>{ PROF.mailAfter=e.target.checked; kvSet('prof',PROF); };
-    $('#mailTest').onclick=async()=>{ const st=$('#mailTestSt'); if(!PROF.mailUrl||!PROF.mailTo){ st.textContent='Заполните «Кому» и ссылку сервиса.'; return; } st.textContent='Отправляю…';
-      try{ await postMail({token:PROF.mailToken||'',to:PROF.mailTo,cc:'',subject:'Предписания СП — тест',body:'Тестовое письмо: отправка из приложения работает.',files:[]}); st.textContent='Отправлено — проверьте почту '+PROF.mailTo; st.style.color='var(--ok)'; }
+  if(IS_APP&&CFG.mailUrl){ upd('p_mailUser','mailUser'); upd('p_mailCcUser','mailCcUser'); $('#p_mailAuto').onchange=e=>{ PROF.mailAuto=e.target.checked; kvSet('prof',PROF); }; $('#p_mailAfter').onchange=e=>{ PROF.mailAfter=e.target.checked; kvSet('prof',PROF); };
+    $('#mailTest').onclick=async()=>{ const st=$('#mailTestSt'); if(!mailTo()){ st.textContent='Впишите свой адрес в «Кому».'; return; } st.textContent='Отправляю…';
+      try{ await postMail({token:CFG.mailToken||'',to:mailTo(),cc:'',subject:'Предписания СП — тест',body:'Тестовое письмо: отправка из приложения работает.',files:[]}); st.textContent='Отправлено — проверьте почту '+mailTo(); st.style.color='var(--ok)'; }
       catch(e){ st.textContent='Не отправлено: '+(e.message||e); st.style.color='var(--crit)'; } }; }
+  const mr=$('#mailReq'); if(mr) mr.onclick=async()=>{ const st=$('#mailReqSt'); st.textContent='Запрашиваю…'; mr.disabled=true;
+    try{ await syncData('force'); }catch(e){} mr.disabled=false;
+    if(NEED_PASS){ st.textContent='Сначала введите пароль базы — настройка почты лежит в зашифрованном пакете.'; renderSettings(); return; }
+    if(CFG.mailUrl){ toast('Почта подключена'); renderSettings(); } else st.textContent=DATA_MSG||'В пакете баз нет настройки почты — попросите обновить пакет.'; };
   $('#syncNow').onclick=async()=>{ $('#syncSt').textContent='Проверяю…'; await syncData(true); renderSettings(); };
   bindPass(renderSettings);
   $('#upRef').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ const t=await f.text(); REF=loadRef(t); await kvSet('ref',t); toast('Справочник: '+REF.length+' формулировок'); }catch(er){ toast(er.message); } renderSettings(); };
@@ -646,7 +710,7 @@ function exampleAct(){ const a=blankAct(); Object.assign(a,{example:true,nnn:'00
   renderHome();
   const t=await kvGet('ref'); if(t){ try{ REF=loadRef(t); }catch(e){} }
   const d=await kvGet('deps'); if(d){ try{ DEPS=loadDeps(d); }catch(e){} }
-  const b=await kvGet('tpl'); if(b) TPL=b; DATA_V=(await kvGet('dataV'))||'';
+  const b=await kvGet('tpl'); if(b) TPL=b; DATA_V=(await kvGet('dataV'))||''; CFG=(await kvGet('cfg'))||{};
   if(VIEW==='home') renderHome();
   await syncData(false); if(VIEW==='home') renderHome(); else if(VIEW==='settings') renderSettings();
   flushOutbox(); })();
