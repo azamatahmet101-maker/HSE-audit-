@@ -37,7 +37,15 @@ jobs:
           mkdir -p assets
           cp icon-1024.png assets/icon-only.png
           cp icon-1024.png assets/icon-foreground.png
+          convert -size 1024x1024 xc:'#0b2c5c' assets/icon-background.png || true
           npx --yes @capacitor/assets@3 generate --android --iconBackgroundColor '#0b2c5c' --iconBackgroundColorDark '#0b2c5c'
+      - name: Проверка иконки
+        run: |
+          # если фон адаптивной иконки не создался — убираем адаптивную иконку, остаются обычные PNG
+          if ! ls android/app/src/main/res/mipmap-*/ic_launcher_background.png >/dev/null 2>&1; then
+            rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+            echo "адаптивная иконка убрана"
+          fi
       - name: Разрешение камеры
         run: |
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />#' android/app/src/main/AndroidManifest.xml
@@ -57,3 +65,4 @@ jobs:
           tag_name: apk-${{ github.run_number }}
           name: Предписания СП — Android, сборка ${{ github.run_number }}
           files: Predpisaniya-SP.apk
+
