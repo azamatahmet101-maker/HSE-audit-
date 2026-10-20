@@ -133,6 +133,31 @@ table.ftab{width:100%;border-collapse:collapse;font-size:13.5px}
 table.ftab th{text-align:left;font-size:11.5px;color:var(--ink2);font-weight:600;padding:6px 6px;border-bottom:1px solid var(--line)}
 table.ftab td{vertical-align:top;padding:8px 6px;border-bottom:1px solid var(--line)}
 table.ftab td:first-child{width:22px;font-weight:700}
+table.ftab{margin-bottom:2px}
+.acts{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.arow{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:12px 14px;min-height:62px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.arow+.arow{border-top:1px solid var(--line)}
+.arow:active{background:var(--chip)}
+.aic{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:var(--chip);transition:background .2s,color .2s}
+.arow.done .aic{background:var(--ok);color:#fff;font-size:17px;font-weight:700}
+.atx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.at{font-weight:600;font-size:15px;color:var(--ink)}
+.as{font-size:12.5px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow.done .as{color:var(--ok)}
+.ach{flex:none;color:var(--mute);font-size:22px;line-height:1;width:18px;text-align:center}
+.arow.busy .ach{font-size:0;width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#clCatch{position:fixed;inset:0;z-index:40;background:rgba(6,14,30,.25);display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.clc{background:var(--card);border-radius:16px;padding:16px;width:100%;max-width:520px;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center}
+.clc-t{font-weight:700;font-size:16px}.clc-s{font-size:13px;color:var(--mute)}
+.actw{display:flex;align-items:center;gap:10px}.actw .act{flex:1;min-width:0}
+.ck{flex:none;position:relative;width:28px;height:28px}.ck input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.ck span{position:absolute;inset:0;border:2px solid var(--line);border-radius:8px;background:var(--card);pointer-events:none}
+.ck input:checked+span{background:var(--accent);border-color:var(--accent)}.ck input:checked+span::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:var(--accent-ink);font-weight:700;font-size:16px}
+.chipsel{display:flex;flex-wrap:wrap;gap:6px}.chipsel .pill{border:0;cursor:pointer;min-height:32px;padding:4px 12px;font-size:13px}.chipsel .pill.on{background:var(--accent);color:var(--accent-ink)}
+.micb{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:20px;display:grid;place-items:center;cursor:pointer}
+.micb.on{background:var(--crit);border-color:var(--crit);color:#fff;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(212,9,63,.18)}}
 pre.tsv{white-space:pre;overflow-x:auto;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:160px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -353,19 +378,25 @@ async function actXlsx(a){ if(!TPL) throw new Error('Загрузите блан
 const REG_H=['Локация','Вид проверки','Направление проверки','Направление работ','Принадлежность объекта проверки','Объект','Год','Месяц','Дата','Структурное подразделение','Описание нарушения','Ссылка на пункт НТД','Ссылка на ISO 14001 / 45001','Категория','Подкатегория','Уровень риска','14 ПСЖ','№ акта','№ пункта','Выявил','Ответственный','Дата устранения (план)','Дата устранения (факт)'];
 function regRows(a){ const d=new Date((a.date||today())+'T00:00'); const by0=a.insp[0]?.fio||''; const resp=a.resp||a.head;
   return a.items.map((it,i)=>[a.loc,a.type==='Ц'?'Целевая':'Комплексная',a.cdir,a.wdir,a.owner,a.obj,d.getFullYear(),MON[d.getMonth()],{date:a.date||today()},a.dep,it.desc||it.note,it.ntd,it.iso,it.cat,it.sub,it.risk,it.psz,actNo(a),String(i+1),it.by||by0,resp,it.due?{date:it.due}:'','']); }
-function regXlsx(a){ const enc=new TextEncoder(); const col=i=>String.fromCharCode(65+i);
+function xlsxBook(name,head,data,widths,filter){ const enc=new TextEncoder(); const col=i=>String.fromCharCode(65+i);
   const cell=(v,r,c)=>{ const ref=col(c)+r; if(v&&v.date) return `<c r="${ref}" s="2"><v>${serial(v.date)}</v></c>`; if(typeof v==='number') return `<c r="${ref}" s="1"><v>${v}</v></c>`; if(v===''||v==null) return ''; return `<c r="${ref}" s="1" t="inlineStr"><is><t xml:space="preserve">${xe(v)}</t></is></c>`; };
-  const rows=[REG_H.map((h,i)=>col(i+1)+' · '+h)].concat(regRows(a));
+  const rows=[head].concat(data);
   const sd=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>ri===0?`<c r="${col(ci)}1" s="3" t="inlineStr"><is><t>${xe(v)}</t></is></c>`:cell(v,ri+1,ci)).join('')}</row>`).join('');
-  const widths=[10,12,18,18,24,20,7,10,11,28,60,50,22,9,24,8,22,16,8,16,28,12,12];
-  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${sd}</sheetData></worksheet>`;
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${filter?'<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>':''}<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${sd}</sheetData>${filter&&data.length?`<autoFilter ref="A1:${col(head.length-1)}${data.length+1}"/>`:''}</worksheet>`;
   const F={'[Content_Types].xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
     '_rels/.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="В реестр" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xe(name)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
     'xl/_rels/workbook.xml.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
     'xl/styles.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd.mm.yyyy"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="4"><xf/><xf applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="164" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf><xf fontId="1" applyFont="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs></styleSheet>`,
     'xl/worksheets/sheet1.xml':sheet};
   return zipStore(Object.entries(F).map(([n,s])=>[n,enc.encode(s)])); }
+const REG_W=[10,12,18,18,24,20,7,10,11,28,60,50,22,9,24,8,22,16,8,16,28,12,12];
+function regXlsx(a){ return regXlsxM([a]); }
+function regXlsxM(L){ const col=i=>String.fromCharCode(65+i); return xlsxBook('В реестр',REG_H.map((h,i)=>col(i+1)+' · '+h),L.flatMap(regRows),REG_W,false); }
+function allXlsx(L){ const H=['№ предписания','Дата','Подразделение','Объект','Подобъект','№ п.','Нарушение','НТД','Категория','Подкатегория','Риск','ПСЖ','Срок устранения','Проверяющий'];
+  const R=L.flatMap(a=>a.items.map((it,i)=>[actNo(a),{date:a.date||today()},a.dep,a.obj,a.subobj,i+1,it.desc||it.note,it.ntd,it.cat,it.sub,it.risk,it.psz,it.due?{date:it.due}:'',it.by||a.insp.map(p=>p.fio).filter(Boolean).join(', ')]));
+  return xlsxBook('Нарушения',H,R,[16,11,24,30,20,6,70,50,9,24,7,22,12,20],true); }
+function regTsvM(L){ return L.map(regTsv).join('\r\n'); }
 function regTsv(a){ const q=v=>{ const s=v&&v.date?dmy(v.date):String(v??''); return /[\t\n"]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }; return regRows(a).map(r=>r.map(q).join('\t')).join('\r\n'); }
 
 /* ===================== Android-приложение (Capacitor) ===================== */
@@ -405,11 +436,41 @@ function showSteps(copied){ const sec=$('#viaClaude'); if(!sec) return; $('#shar
   d.innerHTML=copied?'<span class="grow"><b>Фото</b> — выберите Claude в меню «Поделиться». <b>Текст пакета уже скопирован</b>: в чате Claude нажмите и удерживайте поле ввода → «Вставить», затем отправьте.</span>'
     :'<span class="grow">Фото — выберите Claude в меню «Поделиться». Затем вернитесь сюда, нажмите «или скопировать текст» и вставьте текст в тот же чат.</span>';
   sec.insertBefore(d,sec.querySelector('label.field')); }
+/* голосовой ввод */
+let SRX=null;
+async function dictate(el,onv,btn){ const put=t=>{ t=String(t||'').trim(); if(!t) return; const cur=el.value.trim(); el.value=cur?cur+(/[.,;:!?]$/.test(cur)?' ':', ')+t:t[0].toUpperCase()+t.slice(1); onv(el.value); };
+  if(CAP&&capP('SpeechRecognition')){ const S=capP('SpeechRecognition'); try{ const av=await S.available(); if(!av||!av.available) throw new Error('Распознавание речи недоступно на этом телефоне');
+      try{ await S.requestPermissions(); }catch(e){} btn.classList.add('on'); const r=await S.start({language:'ru-RU',maxResults:1,prompt:'Опишите нарушение',partialResults:false,popup:true}); put(r&&r.matches&&r.matches[0]); }
+    catch(e){ toast(e.message||'Не удалось распознать речь'); } finally{ btn.classList.remove('on'); } return; }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ toast('Голосовой ввод тут недоступен — нажмите 🎤 на клавиатуре телефона'); el.focus(); return; }
+  if(SRX){ try{ SRX.stop(); }catch(e){} return; }
+  const r=new SR(); SRX=r; r.lang='ru-RU'; r.interimResults=false; r.continuous=false; r.maxAlternatives=1; btn.classList.add('on');
+  r.onresult=e=>{ put([...e.results].map(x=>x[0].transcript).join(' ')); };
+  r.onerror=e=>{ toast(e.error==='not-allowed'||e.error==='service-not-allowed'?'Нет доступа к микрофону — разрешите его в настройках или используйте 🎤 на клавиатуре':e.error==='no-speech'?'Не расслышал — попробуйте ещё раз':'Голосовой ввод: '+e.error); };
+  r.onend=()=>{ SRX=null; btn.classList.remove('on'); };
+  try{ r.start(); toast('Говорите… нажмите 🎤 ещё раз, чтобы закончить'); }catch(e){ SRX=null; btn.classList.remove('on'); toast('Голосовой ввод недоступен — используйте 🎤 на клавиатуре'); } }
+
+/* автозагрузка ответа Claude при возврате в приложение */
+let CLWAIT=null; try{ CLWAIT=JSON.parse(localStorage.getItem('clwait')||'null'); }catch(e){}
+function setWait(v){ CLWAIT=v; try{ v?localStorage.setItem('clwait',JSON.stringify(v)):localStorage.removeItem('clwait'); }catch(e){} }
+let AUTOPASTE=null, LASTCLIP='', AUTOBUSY=false;
+async function readClip(){ if(CAP&&capP('Clipboard')){ const r=await capP('Clipboard').read(); return r&&r.value||''; } return await withTO(navigator.clipboard.readText(),20000); }
+function hideCatcher(){ const c=$('#clCatch'); if(c) c.remove(); }
+function showCatcher(){ if($('#clCatch')) return; const w=document.createElement('div'); w.id='clCatch';
+  w.innerHTML=`<div class="clc"><div class="clc-t">Загрузить ответ Claude?</div><div class="clc-s">Коснитесь экрана в любом месте${/iP(hone|ad|od)/.test(navigator.userAgent)?' и нажмите «Вставить»':''}</div><button class="btn ghost small" id="clNo">Не сейчас</button></div>`;
+  document.body.appendChild(w); w.onclick=e=>{ if(e.target.id==='clNo'){ hideCatcher(); return; } tryAuto(true); }; }
+async function tryAuto(gesture){ if(AUTOBUSY||!CLWAIT||Date.now()-CLWAIT.t>3*3600e3) return; if(VIEW!=='act'||!CUR||CUR.id!==CLWAIT.id||!AUTOPASTE) return;
+  AUTOBUSY=true; let raw=''; try{ raw=await readClip(); }catch(e){ AUTOBUSY=false; if(gesture){ hideCatcher(); toast('Не удалось прочитать буфер — нажмите «2. Загрузить ответ»'); } else if(!CAP) showCatcher(); return; }
+  AUTOBUSY=false;
+  if(!raw||!/"desc"/.test(raw)||raw===LASTCLIP){ if(gesture){ hideCatcher(); toast('Ответа Claude в буфере пока нет — нажмите «Копировать» под ответом и вернитесь'); } return; }
+  LASTCLIP=raw; hideCatcher(); try{ AUTOPASTE(raw); setWait(null); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) setTimeout(()=>tryAuto(false),700); });
 function bindViaClaude(a){ const t=$('#toClaude'); if(!t) return;
   // фото готовим заранее: на iPhone «Поделиться» надо вызывать сразу по нажатию, без ожиданий
   let PACK=null; (async()=>{ const p=claudePack(a); PACK={text:p.text,files:await packFiles(p.L)}; })();
   const cp=$('#copyClaude'); if(cp) cp.onclick=async()=>{ const {text}=claudePack(a); try{ await withTO(navigator.clipboard.writeText(text),3000); toast('Текст скопирован. Вставьте его в чат Claude и приложите фото из галереи.'); }catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.style.whiteSpace='pre-wrap'; box.textContent=text; cp.closest('section').append(box); toast('Выделите текст и скопируйте вручную'); } };
-  t.onclick=async()=>{ if(t.disabled) return; t.disabled=true; setTimeout(()=>{ t.disabled=false; },4000);
+  t.onclick=async()=>{ if(t.disabled) return; t.disabled=true; setTimeout(()=>{ t.disabled=false; },4000); setWait({id:a.id,t:Date.now()});
     const text=PACK?PACK.text:claudePack(a).text; const photos=PACK?PACK.files:[];
     // задание — отдельным текстовым файлом: так iPhone передаёт его вместе с фото одним сообщением
     const task=new File([text],`Задание ${safeName(actNo(a))}.txt`,{type:'text/plain'}); const files=[task,...photos];
@@ -423,8 +484,9 @@ function bindViaClaude(a){ const t=$('#toClaude'); if(!t) return;
   $('#loadAns').onclick=async()=>{ let raw='';
     try{ if(CAP&&capP('Clipboard')){ const r=await capP('Clipboard').read(); raw=r&&r.value||''; } else raw=await withTO(navigator.clipboard.readText(),20000); }catch(e){}
     if(!raw||!/"desc"/.test(raw)){ $('#manualBox').open=true; const f=$('#f_paste'); if(raw) f.value=raw; toast(raw?'В буфере нет ответа Claude — скопируйте ответ целиком («Копировать» под сообщением).':'Не удалось прочитать буфер обмена — вставьте ответ в поле вручную.'); return; }
-    try{ applyPaste(raw); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
-  $('#pasteOk').onclick=()=>{ try{ applyPaste($('#f_paste').value); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
+    try{ LASTCLIP=raw; applyPaste(raw); setWait(null); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
+  $('#pasteOk').onclick=()=>{ try{ applyPaste($('#f_paste').value); setWait(null); }catch(e){ toast('Ошибка: '+(e&&e.message||e)); } };
+  AUTOPASTE=raw=>applyPaste(raw); if(CLWAIT&&CLWAIT.id===a.id) setTimeout(()=>tryAuto(false),600);
   function applyPaste(raw){ if(!raw.trim()){ toast('Сначала вставьте ответ Claude в поле.'); return; } let arr=null; const m=/```(?:json)?\s*([\s\S]*?)```/.exec(raw); const body=m?m[1]:raw.slice(raw.indexOf('['),raw.lastIndexOf(']')+1);
     try{ arr=JSON.parse(body); }catch(e){} if(!Array.isArray(arr)){ toast('Не нашёл блок JSON в ответе — скопируйте ответ Claude целиком.'); return; }
     let n=0; for(const r of arr){ const it=a.items[(+r.n||0)-1]; if(!it||!r.desc) continue; n++;
@@ -483,7 +545,7 @@ async function sendMail(a,silent){ if(!MAIL_OK()){ toast(CFG.mailUrl?'Укажи
   if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return false; }
   let m; try{ m=await buildMail(a); }catch(e){ toast(e.message||'Не удалось собрать файлы'); return false; }
   const st=$('#mailSt'); if(st) st.textContent='Отправляю…';
-  try{ await postMail(m); a.sentAt=Date.now(); a.sentTo=m.to; await saveActs(); if(st) st.textContent=`Отправлено на ${m.to} · ${new Date().toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`; toast('Предписание отправлено на '+m.to); return true; }
+  try{ await postMail(m); a.sentAt=Date.now(); a.sentTo=m.to; a.regAt=a.regAt||Date.now(); await saveActs(); if(st) st.textContent=`Отправлено на ${m.to} · ${new Date().toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`; toast('Предписание отправлено на '+m.to); return true; }
   catch(e){ const offline=!navigator.onLine||/timeout|Failed to fetch|NetworkError|Load failed/i.test(String(e&&e.message||e));
     if(offline){ const q=(await kvGet('outbox'))||[]; q.push({id:a.id,m}); await kvSet('outbox',q); a.queued=Date.now(); await saveActs(); if(st) st.textContent='Нет связи — письмо в очереди, уйдёт само, когда появится интернет'; toast('Нет связи — отправлю, когда появится интернет'); }
     else { if(st) st.textContent='Не отправлено: '+(e.message||e); toast('Не отправлено: '+(e.message||e)); } return false; } }
@@ -523,17 +585,56 @@ function renderHome(){ $('#ttl').textContent='Предписания СП'; cons
   $('#view').innerHTML=`${NEED_PASS?passBox():''}
     ${miss.length?`<div class="conf"><span class="grow small">Для подбора формулировок и Excel загрузите ${miss.join(' и ')} — один раз на этом устройстве.</span><button class="btn" id="toSet">Настройки</button></div>`:''}
     ${!IDB_OK?`<div class="conf small">Хранилище браузера недоступно: черновики пропадут после закрытия страницы.</div>`:''}
-    <div class="row"><div class="grow"><div class="lbl">Мои предписания</div><div class="small muted">Хранятся только на этом устройстве</div></div><button class="btn pri" id="newAct">+ Новое</button></div>
+    <div class="row"><div class="grow"><div class="lbl">Мои предписания</div><div class="small muted">Хранятся только на этом устройстве</div></div>${ACTS.some(a=>!a.example&&a.items.length)?`<button class="btn" id="homeMenu" aria-label="Действия">${HM.open?'✕':'⋯ Действия'}</button>`:''}<button class="btn pri" id="newAct">+ Новое</button></div>
+    ${HM.open?homePanel():''}
     <div style="display:flex;flex-direction:column;gap:8px">${ACTS.length?ACTS.map(a=>{ const n=a.items.length, w=a.items.filter(i=>i.ntdWarn).length, nd=a.items.filter(i=>!i.desc).length;
-      return `<button class="act" data-id="${a.id}"><div class="grow"><div class="row" style="gap:8px"><span class="no">${esc(actNo(a))}</span>${a.example?'<span class="pill ex">пример</span>':''}</div>
+      const can=HM.open&&!a.example&&a.items.length;
+      return `<div class="actw">${can?`<label class="ck"><input type="checkbox" data-sel="${a.id}"${HM.sel.has(a.id)?' checked':''}><span></span></label>`:''}<button class="act" data-id="${a.id}"><div class="grow"><div class="row" style="gap:8px"><span class="no">${esc(actNo(a))}</span>${a.example?'<span class="pill ex">пример</span>':''}</div>
         <div class="meta">${esc(a.dep||'подразделение не указано')} · ${dmy(a.date)}</div></div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="pill num">${n} п.</span>${nd?`<span class="pill warn">${nd} без текста</span>`:w?`<span class="pill warn">⚠ ${w} НТД</span>`:n?'<span class="pill ok">готово</span>':''}</div></button>`; }).join('')
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="pill num">${n} п.</span>${nd?`<span class="pill warn">${nd} без текста</span>`:w?`<span class="pill warn">⚠ ${w} НТД</span>`:n?'<span class="pill ok">готово</span>':''}${a.regAt?'<span class="pill">📋 в реестре</span>':''}</div></button></div>`; }).join('')
       :`<div class="empty">Пока нет предписаний.<br>Нажмите «+ Новое», заполните шапку и добавляйте пункты: фото и пара слов.</div>`}</div>`;
   bindPass(renderHome);
   $('#newAct').onclick=()=>{ CUR=blankAct(); ACTS.unshift(CUR); saveActs(); go('act'); };
   const ts=$('#toSet'); if(ts) ts.onclick=()=>go('settings');
   document.querySelectorAll('.act').forEach(b=>b.onclick=()=>{ CUR=ACTS.find(a=>a.id===b.dataset.id); go('act'); });
-  bar(''); }
+  bindHome(); bar(''); }
+/* ===================== общие действия на главной ===================== */
+const HM={open:false,f:'new',sel:new Set()};
+const HM_F={new:'Не в реестре',week:'За неделю',month:'За месяц',all:'Все'};
+function hmPool(){ return ACTS.filter(a=>!a.example&&a.items.length); }
+function hmPick(f){ HM.f=f; const now=Date.now(), D=864e5; HM.sel=new Set(hmPool().filter(a=>f==='all'?true:f==='new'?!a.regAt:(now-new Date((a.date||today())+'T00:00').getTime())<=(f==='week'?7:31)*D).map(a=>a.id)); }
+function hmList(){ return hmPool().filter(a=>HM.sel.has(a.id)).sort((x,y)=>(x.date||'').localeCompare(y.date||'')||actNo(x).localeCompare(actNo(y))); }
+function homePanel(){ const L0=hmList(), bad=L0.filter(a=>actIssues(a).hard.length), L=L0.filter(a=>!bad.includes(a)), n=L.reduce((s,a)=>s+a.items.length,0);
+  const sub=L.length?`${L.length} ${plur(L.length,'предписание','предписания','предписаний')} · ${n} ${plur(n,'пункт','пункта','пунктов')}`:'Ничего не выбрано';
+  return `<section class="card sheet" id="hmPanel"><div class="lbl">Общие действия</div>
+    <div class="chipsel">${Object.entries(HM_F).map(([k,t])=>`<button class="pill${HM.f===k?' on':''}" data-hf="${k}">${t}</button>`).join('')}</div>
+    <div class="small muted">Выбрано: <b>${sub}</b>. Галочками в списке можно добавить или убрать.</div>
+    ${bad.length?`<div class="conf small">Не готовы и будут пропущены: ${bad.map(a=>esc(actNo(a))).join(', ')} — есть пункты без формулировки или нет номера.</div>`:''}
+    ${L.length?`<div class="acts">
+      ${actRow('hmReg','📋','Строки в реестр — разом','Один файл, колонки B–X, все пункты')}
+      ${actRow('hmCp','📎','Скопировать строки для реестра','Вставить сразу в открытый реестр')}
+      ${actRow('hmAll','📊','Общий файл нарушений','Все пункты: № акта, подразделение, срок')}
+      ${IS_APP?actRow('hmMail','✉️','Отправить на почту',mailTo()?'Оба файла · '+mailTo():'Настройте адрес в ⚙ → «Почта»'):''}
+    </div><div class="small muted">После выгрузки строк предписания помечаются «в реестре» и в следующий раз по фильтру «Не в реестре» не попадут.</div>`:''}</section>`; }
+function hmReady(){ return hmList().filter(a=>!actIssues(a).hard.length); }
+function hmMark(L){ const t=Date.now(); L.forEach(a=>a.regAt=t); kvSet('acts',ACTS); }
+function hmName(L){ const d=L.map(a=>a.date).filter(Boolean).sort(); return d.length?(d[0]===d.at(-1)?dmy(d[0]):dmy(d[0])+'–'+dmy(d.at(-1))):dmy(today()); }
+function bindHome(){ const m=$('#homeMenu'); if(m) m.onclick=()=>{ HM.open=!HM.open; if(HM.open) hmPick(HM.f); renderHome(); };
+  if(!HM.open) return;
+  document.querySelectorAll('[data-hf]').forEach(b=>b.onclick=()=>{ hmPick(b.dataset.hf); renderHome(); });
+  document.querySelectorAll('[data-sel]').forEach(c=>c.onchange=()=>{ c.checked?HM.sel.add(c.dataset.sel):HM.sel.delete(c.dataset.sel); const y=scrollY; renderHome(); scrollTo({top:y}); });
+  const fin=(L,re)=>{ if(re) setTimeout(()=>{ if(VIEW!=='home') return; hmPick(HM.f); const y=scrollY; renderHome(); scrollTo({top:y}); },1600); };
+  const need=()=>{ const L=hmReady(); if(!L.length) throw new Error('Нет готовых предписаний в выборе'); return L; };
+  const r1=$('#hmReg'); if(r1) r1.onclick=()=>runRow(r1,async()=>{ const L=need(); await saveFile(`Строки в реестр ${hmName(L)}.xlsx`,regXlsxM(L)); hmMark(L); toast(`В файле ${L.reduce((s,a)=>s+a.items.length,0)} строк из ${L.length} предписаний`); fin(L,true); return true; },'Сохранено');
+  const r2=$('#hmCp'); if(r2) r2.onclick=()=>runRow(r2,async()=>{ const L=need(); const t=regTsvM(L);
+    try{ await navigator.clipboard.writeText(t); }catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.textContent=t; r2.after(box); const r=document.createRange(); r.selectNodeContents(box); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast('Выделено — скопируйте вручную'); return false; }
+    hmMark(L); toast(`Скопировано ${L.reduce((s,a)=>s+a.items.length,0)} строк — вставьте в колонку B реестра`); fin(L,true); return true; },'Скопировано');
+  const r3=$('#hmAll'); if(r3) r3.onclick=()=>runRow(r3,async()=>{ const L=need(); await saveFile(`Нарушения ${hmName(L)}.xlsx`,allXlsx(L)); return true; },'Сохранено');
+  const r4=$('#hmMail'); if(r4) r4.onclick=()=>runRow(r4,async()=>{ if(!MAIL_OK()){ toast('Почта не настроена: ⚙ → «Почта»'); return false; } const L=need(); const X='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; const nm=hmName(L), n=L.reduce((s,a)=>s+a.items.length,0);
+    const m={token:CFG.mailToken||'',to:mailTo(),cc:mailCc(),subject:`Предписания за ${nm}: ${L.length} шт.`,body:`Сводка предписаний за ${nm}.\nПредписаний: ${L.length}, пунктов: ${n}.\n${L.map(a=>actNo(a)+(a.dep?' — '+a.dep:'')).join('\n')}\n\nФайлы во вложении: общий файл нарушений и строки для реестра.`,
+      files:[{name:`Нарушения ${nm}.xlsx`,type:X,data:await blobB64(new Blob([allXlsx(L)]))},{name:`Строки в реестр ${nm}.xlsx`,type:X,data:await blobB64(new Blob([regXlsxM(L)]))}]};
+    try{ await postMail(m); }catch(e){ const off=!navigator.onLine||/timeout|Failed to fetch|NetworkError|Load failed/i.test(String(e&&e.message||e)); if(off){ const q=(await kvGet('outbox'))||[]; q.push({id:'',m}); await kvSet('outbox',q); toast('Нет связи — письмо уйдёт, когда появится интернет'); hmMark(L); return false; } throw new Error('Не отправлено: '+(e.message||e)); }
+    hmMark(L); toast('Отправлено на '+m.to); fin(L,true); return true; },'Отправлено'); }
 
 function actSig(a){ return JSON.stringify([a.type,a.nnn,a.yy,a.suf,a.date,a.dep,a.obj,a.subobj,a.head,a.resp,a.att,a.insp,a.items.map(it=>[it.desc,it.note,it.ntd,it.due,it.cat,it.sub,it.risk,it.iso,it.psz,it.photos.length])]); }
 function formView(a){ const f=a.formed; if(!f) return `<div class="small muted">Нажмите «Сформировать» — здесь появится предписание: пункты, НТД и сроки, а под ним выгрузка в Excel, строки в реестр и отправка на почту.</div>`;
@@ -542,19 +643,28 @@ function formView(a){ const f=a.formed; if(!f) return `<div class="small muted">
   return `${stale?`<div class="conf small" style="background:#fde2e2;color:#8a1c1c"><b>Изменено после формирования — нажмите «Сформировать заново».</b></div>`:''}
     ${hard.length?`<div class="conf small" style="display:block;background:#fde2e2;color:#8a1c1c"><b>Нужно исправить:</b>${li(hard)}</div>`:''}
     ${soft.length?`<div class="conf small" style="display:block"><b>Стоит проверить:</b>${li(soft)}</div>`:''}
+    ${a.regAt?`<div class="small muted">📋 Выгружено в реестр ${dmy(new Date(a.regAt).toISOString().slice(0,10))} · <a href="#" id="unReg">снять отметку</a></div>`:''}
     <div class="small muted">${esc(actNo(a))} от ${dmy(a.date)} · ${esc(a.dep||'подразделение не указано')} · сформировано ${new Date(f.at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
     <table class="ftab"><thead><tr><th>№</th><th>Нарушение · НТД</th><th>Срок</th></tr></thead><tbody>${f.rows.map((r,i)=>`<tr><td class="num">${i+1}</td><td><div>${esc(r.desc)}</div><div class="small muted">${r.ntd?esc(r.ntd):'НТД не указан'}${r.warn?' <span class="pill warn">⚠ проверить</span>':''}</div></td><td class="num" style="white-space:nowrap">${r.due?'до '+dmy(r.due):'—'}</td></tr>`).join('')}</tbody></table>
-    ${!stale&&!hard.length?`<div class="row"><button class="btn pri grow" id="xlAct">Предписание в Excel</button><button class="btn grow" id="xlReg">Строки в реестр</button></div>
-      ${IS_APP?`<button class="btn pri" id="mailAct">📧 Отправить на почту${mailTo()?' — '+esc(mailTo()):''}</button><div class="small muted" id="mailSt">${a.sentAt?`Отправлено на ${esc(a.sentTo||'')} · ${new Date(a.sentAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}`:a.queued?'Письмо в очереди — уйдёт, когда появится интернет':(MAIL_OK()?'':'Настройте отправку в ⚙ → «Почта»')}</div>`:''}
-      <button class="btn ghost" id="cpReg">Копировать строки для реестра</button>
-      <div class="small muted">Строки встают в реестр СП с колонки B (Локация) первой пустой строки.</div>`:''}`; }
-function bindForm(a){
-  const xa=$('#xlAct'); if(xa) xa.onclick=async()=>{ if(PROF.mailAuto&&MAIL_OK()) sendMail(a,true); try{ const b=await actXlsx(a); await saveFile(`Предписание ${safeName(actNo(a))} ${dmy(a.date)}.xlsx`,b); }catch(e){ toast(e.message||'Не удалось собрать файл'); } };
-  const ma=$('#mailAct'); if(ma) ma.onclick=async()=>{ ma.disabled=true; try{ await sendMail(a); }finally{ ma.disabled=false; } };
-  const xr=$('#xlReg'); if(xr) xr.onclick=async()=>{ await saveFile(`Строки в реестр ${safeName(actNo(a))}.xlsx`,regXlsx(a)); };
-  const cr=$('#cpReg'); if(cr) cr.onclick=async()=>{ const t=regTsv(a);
-    try{ await navigator.clipboard.writeText(t); toast('Скопировано '+a.items.length+' строк — вставьте в колонку B реестра'); }
-    catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.textContent=t; cr.after(box); const r=document.createRange(); r.selectNodeContents(box); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast('Выделено — скопируйте вручную'); } }; }
+    ${!stale&&!hard.length?`<div class="lbl" style="margin-top:6px">Что сделать с предписанием</div><div class="acts">
+      ${actRow('xlAct','📄','Предписание в Excel',`По фирменному бланку, ${a.items.length} ${plur(a.items.length,'пункт','пункта','пунктов')}`,a.done&&a.done.xl,'Сохранено')}
+      ${actRow('xlReg','📋','Строки в реестр','Файл для вставки с колонки B',a.done&&a.done.reg,'Сохранено')}
+      ${IS_APP?actRow('mailAct','✉️','Отправить на почту',a.queued&&!a.sentAt?'⏳ В очереди — уйдёт при связи':(mailTo()||'Настройте адрес в ⚙ → «Почта»'),a.sentAt,'Отправлено','mailSt'):''}
+      ${actRow('cpReg','📎','Скопировать строки для реестра','Вставить сразу в открытый реестр',a.done&&a.done.cp,'Скопировано')}
+    </div>`:''}`; }
+const tm=t=>new Date(t).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+function plur(n,a,b,c){ const m=n%10,h=n%100; return m===1&&h!==11?a:m>=2&&m<=4&&(h<12||h>14)?b:c; }
+function actRow(id,ic,t,sub,doneAt,doneTxt,subId){ return `<button class="arow${doneAt?' done':''}" id="${id}"><span class="aic">${doneAt?'✓':ic}</span><span class="atx"><span class="at">${esc(t)}</span><span class="as"${subId?` id="${subId}"`:''}>${doneAt?`✓ ${doneTxt} ${tm(doneAt)}`:esc(sub)}</span></span><span class="ach">›</span></button>`; }
+async function runRow(el,fn,okTxt){ if(el.classList.contains('busy')) return; el.classList.add('busy'); let ok=false; try{ ok=await fn(); }catch(e){ toast(e.message||String(e)); } finally{ el.classList.remove('busy'); }
+  if(ok){ el.classList.add('done'); el.querySelector('.aic').textContent='✓'; el.querySelector('.as').textContent=`✓ ${okTxt} ${tm(Date.now())}`; } return ok; }
+function bindForm(a){ const D=k=>{ a.done=a.done||{}; a.done[k]=Date.now(); saveSoon(); return true; };
+  const ur=$('#unReg'); if(ur) ur.onclick=e=>{ e.preventDefault(); delete a.regAt; saveSoon(); $('#formOut').innerHTML=formView(a); bindForm(a); toast('Отметка снята — предписание снова попадёт в общую выгрузку'); };
+  const xa=$('#xlAct'); if(xa) xa.onclick=()=>runRow(xa,async()=>{ if(PROF.mailAuto&&MAIL_OK()) sendMail(a,true); const b=await actXlsx(a); await saveFile(`Предписание ${safeName(actNo(a))} ${dmy(a.date)}.xlsx`,b); return D('xl'); },'Сохранено');
+  const xr=$('#xlReg'); if(xr) xr.onclick=()=>runRow(xr,async()=>{ await saveFile(`Строки в реестр ${safeName(actNo(a))}.xlsx`,regXlsx(a)); a.regAt=Date.now(); return D('reg'); },'Сохранено');
+  const ma=$('#mailAct'); if(ma) ma.onclick=()=>runRow(ma,async()=>await sendMail(a),'Отправлено');
+  const cr=$('#cpReg'); if(cr) cr.onclick=()=>runRow(cr,async()=>{ const t=regTsv(a);
+    try{ await navigator.clipboard.writeText(t); toast('Скопировано '+a.items.length+' строк — вставьте в колонку B реестра'); a.regAt=Date.now(); return D('cp'); }
+    catch(e){ const box=document.createElement('pre'); box.className='tsv'; box.textContent=t; cr.after(box); const r=document.createRange(); r.selectNodeContents(box); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast('Выделено — скопируйте вручную'); return false; } },'Скопировано'); }
 function depList(){ return DEPS?`<datalist id="dlDep">${DEPS.slice(0,500).map(d=>`<option value="${esc(d.dep)}">`).join('')}</datalist>`:''; }
 function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textContent=actNo(a);
   const hdrOpen=!a.dep||!a.nnn;
@@ -588,7 +698,7 @@ function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textC
       :`<div class="empty">Добавьте первый пункт: сфотографируйте нарушение и напишите пару слов. Формулировку, НТД и категорию подберёт Claude или справочник.</div>`}</div>
     <button class="btn" id="addIt">+ Добавить пункт</button>
     ${!(SAMPLE&&!SAMPLE_OFF)&&a.items.length?`<section class="card sheet" id="viaClaude"><div class="lbl">Формулировки через Claude</div>
-      <div class="small muted">Кнопки внизу экрана. <b>1.</b> Отправьте пункты: фото и задание уйдут в Claude одним сообщением — выберите Claude и нажмите «Отправить». <b>2.</b> Под ответом Claude нажмите «Копировать», вернитесь сюда и нажмите «Загрузить ответ».</div>
+      <div class="small muted">Кнопки внизу экрана. <b>1.</b> Отправьте пункты: фото и задание уйдут в Claude одним сообщением — выберите Claude и нажмите «Отправить». <b>2.</b> Под ответом Claude нажмите «Копировать» и вернитесь сюда — ответ загрузится сам. Кнопка «2. Загрузить ответ» — если не подхватилось.</div>
       <details id="manualBox"><summary class="small muted" style="cursor:pointer;padding:6px 0">Если не получается — вручную</summary><div class="sheet" style="margin-top:8px">
         <button class="btn ghost" id="copyClaude">Скопировать текст задания</button>
         <label class="field"><span>Ответ Claude — нажмите и удерживайте → «Вставить»</span><textarea id="f_paste" rows="4" placeholder="Сюда вставляется ответ Claude целиком"></textarea></label>
@@ -623,7 +733,7 @@ function renderAct(){ const a=CUR; if(!a){ go('home'); return; } $('#ttl').textC
   hd.querySelectorAll('.it').forEach(b=>b.onclick=()=>{ CURI=+b.dataset.i; go('item'); });
   const ad=$('#allDue'); if(ad) ad.onclick=()=>{ $('#allDueBox').hidden=!$('#allDueBox').hidden; };
   $('#allDueOk').onclick=()=>{ const v=$('#f_alldue').value; if(!v) return; a.items.forEach(i=>i.due=v); saveSoon(); renderAct(); toast('Срок '+dmy(v)+' для всех пунктов'); };
-  $('#formAct').onclick=()=>{ if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return; } a.formed={at:Date.now(),sig:actSig(a),rows:a.items.map(it=>({desc:it.desc||it.note||'',ntd:it.ntd||'',warn:!!(it.ntdWarn&&it.desc),due:it.due||''}))};
+  $('#formAct').onclick=()=>{ if(!a.items.length){ toast('Добавьте хотя бы один пункт.'); return; } a.done={}; a.formed={at:Date.now(),sig:actSig(a),rows:a.items.map(it=>({desc:it.desc||it.note||'',ntd:it.ntd||'',warn:!!(it.ntdWarn&&it.desc),due:it.due||''}))};
     saveSoon(); $('#formAct').textContent='Сформировать заново'; $('#formOut').innerHTML=formView(a); bindForm(a); $('#formSec').scrollIntoView({behavior:'smooth',block:'start'}); };
   bindForm(a);
   $('#addIt').onclick=()=>{ a.items.push(blankItem()); CURI=a.items.length-1; saveSoon(); go('item'); };
@@ -642,7 +752,7 @@ function renderItem(){ const a=CUR; const it=a&&a.items[CURI]; if(!it){ go('act'
       <div class="photos" id="phs">${it.photos.map(p=>`<div class="pt"><img data-ph="${p}" alt="Фото пункта"><button data-rmph="${p}" aria-label="Удалить фото">✕</button></div>`).join('')}
         <label class="addph">📷<br>Фото<input type="file" id="phIn" accept="image/*" capture="environment"></label>
         <label class="addph">🖼<br>Из галереи<input type="file" id="phIn2" accept="image/*" multiple></label></div>
-      <label class="field"><span>Пара слов о нарушении</span><textarea id="f_note" rows="2" placeholder="нет отбойника у обвязки на площадке налива">${esc(it.note)}</textarea></label>
+      <div class="row" style="align-items:flex-end;gap:8px"><label class="field grow"><span>Пара слов о нарушении</span><textarea id="f_note" rows="2" placeholder="нет отбойника у обвязки на площадке налива">${esc(it.note)}</textarea></label><button class="micb" id="micBtn" aria-label="Голосовой ввод">🎤</button></div>
       <div class="ask">${canAsk?`<div class="row"><button class="btn pri grow" id="askBtn">✦ Сформулировать с Claude</button><button class="btn" id="stopBtn" hidden>Стоп</button></div>
         <div class="st small" id="askSt">${it.photos.length&&!SAMPLE_IMG?'Фото в этом просмотре не передаются — Claude увидит только текст.':''}</div>`
         :(IS_APP?`<div class="small muted">Заполните пункты фото и заметками, а сформулировать их можно все сразу кнопкой «Отправить в Claude» на экране предписания. Или выберите формулировку из реестра ниже.</div>`:`<div class="small muted">Claude здесь недоступен: страница открыта не внутри claude.ai. Откройте её по ссылке claude.ai/artifact/… в браузере, где вы вошли в Claude, или в приложении Claude. Пока можно выбрать формулировку из реестра ниже.</div>`)}</div>
@@ -666,6 +776,7 @@ function renderItem(){ const a=CUR; const it=a&&a.items[CURI]; if(!it){ go('act'
   bind('f_note','note'); bind('f_desc','desc'); bind('f_ntd','ntd'); bind('f_iso','iso'); bind('f_cat','cat','change'); bind('f_sub','sub','change'); bind('f_risk','risk','change'); bind('f_due','due','change'); bind('f_psz','psz','change'); bind('f_by','by','change');
   const ok=$('#f_ntdok'); if(ok) ok.onchange=()=>{ it.ntdWarn=!ok.checked; saveSoon(); };
   $('#f_note').addEventListener('input',()=>sugRender(it));
+  $('#micBtn').onclick=()=>dictate($('#f_note'),v=>{ it.note=v; saveSoon(); sugRender(it); },$('#micBtn'));
   const addPh=async files=>{ for(const f of files){ const b=await shrink(f); const id=uid(); await kvSet('ph:'+id,b); it.photos.push(id); } saveActs(); renderItem(); };
   $('#phIn').onchange=e=>addPh([...e.target.files]); $('#phIn2').onchange=e=>addPh([...e.target.files]);
   document.querySelectorAll('[data-rmph]').forEach(b=>b.onclick=()=>{ const p=b.dataset.rmph; it.photos=it.photos.filter(x=>x!==p); kvDel('ph:'+p); saveActs(); renderItem(); });
