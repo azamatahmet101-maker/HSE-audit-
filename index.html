@@ -370,6 +370,9 @@ async function actXlsx(a){ if(!TPL) throw new Error('Загрузите блан
   set('B30',a.dep); set('C33',a.obj); set('C35',a.subobj);
   [[63,0],[66,1],[69,2]].forEach(([r,i])=>{ set('B'+R(r),P[i].pos); set('F'+R(r),P[i].fio); });
   set('B'+R(75),a.head);
+  // незаполненные 2-й и 3-й проверяющие: их строки в шапке и в подписях скрываем
+  const hide=r=>{ s=s.replace(new RegExp('<row r="'+r+'"([^>]*?)(/?)>'),(m,at,sl)=>`<row r="${r}"${at.replace(/ hidden="[01]"/,'')} hidden="1"${sl}>`); };
+  [[1,[17,18,19],[65,66,67]],[2,[20,21,22],[68,69,70]]].forEach(([i,h,g])=>{ const p=a.insp[i]; if(!p||!(String(p.pos||'').trim()||String(p.fio||'').trim())){ h.forEach(hide); g.forEach(r=>hide(R(r))); } });
   put('xl/worksheets/sheet1.xml',s);
   let wb=get('xl/workbook.xml'); wb=wb.replace(/(Print_Area"[^>]*>[^<]*\$A\$1:\$H\$)(\d+)/,(m,x,r)=>x+(+r+d)).replace(/(_FilterDatabase"[^>]*>[^<]*\$A\$39:\$H\$)(\d+)/,(m,x)=>x+(39+N)); put('xl/workbook.xml',wb);
   return zipStore(files); }
